@@ -1,4 +1,4 @@
-//! Runs the audio helper in tools/audio_tap and keeps the most recent samples.
+//! Runs the audio helper (tools/audio_tap) and keeps the most recent samples.
 
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Read};
@@ -9,10 +9,9 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::{self, sleep};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-const HELPER_APP: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../../tools/audio_tap/FoxkitAudioTap.app"
-);
+const HELPER_NAME: &str = "FoxkitAudioTap.app";
+// Where build.sh leaves it, for running from source.
+const SOURCE_HELPER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tools/audio_tap");
 const CHANNELS: usize = 2;
 const SAMPLE_BYTES: usize = 4;
 const PERMISSION_WAIT: Duration = Duration::from_secs(90);
@@ -25,6 +24,15 @@ struct Shared {
     pid: Option<u32>,
     errors: Vec<String>,
     samples: Vec<f32>,
+}
+
+/// In a packaged app the helper is in Contents/Helpers, next to Contents/MacOS.
+fn helper_app() -> PathBuf {
+    let bundled = std::env::current_exe().ok().and_then(|exe| {
+        let helper = exe.parent()?.parent()?.join("Helpers").join(HELPER_NAME);
+        helper.exists().then_some(helper)
+    });
+    bundled.unwrap_or_else(|| Path::new(SOURCE_HELPER).join(HELPER_NAME))
 }
 
 pub struct AudioSource {
@@ -66,7 +74,7 @@ impl AudioSource {
             .arg(&samples_path)
             .arg("--stderr")
             .arg(&status_path)
-            .arg(HELPER_APP)
+            .arg(helper_app())
             .arg("--args")
             .arg(std::process::id().to_string())
             .status();
