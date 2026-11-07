@@ -14,7 +14,7 @@ use objc2::rc::Retained;
 use objc2::runtime::{AnyClass, AnyObject, Bool, ClassBuilder, Sel};
 use objc2::sel;
 use objc2::MainThreadMarker;
-use objc2_app_kit::{NSApplication, NSEvent, NSEventMask, NSScreen, NSView, NSWindow};
+use objc2_app_kit::{NSEvent, NSEventMask, NSScreen, NSStatusItem, NSWindow};
 use objc2_foundation::{NSPoint, NSRect, NSSize};
 
 const CLASS_NAME: &CStr = c"FoxkitPanel";
@@ -97,55 +97,28 @@ pub unsafe fn show(window: *mut c_void) {
     let window = &*(window as *const AnyObject);
     let none: *const AnyObject = std::ptr::null();
     let _: () = msg_send![window, makeKeyAndOrderFront: none];
-    highlight_icon(true);
 }
 
 const GAP: f64 = 6.0;
 
 thread_local! {
-    // The menu bar icon's button, shown pressed while the panel is open, as macOS's own
-    // menu bar icons are. Only ever used on the main thread.
-    static ICON_BUTTON: RefCell<Option<Retained<NSView>>> = const { RefCell::new(None) };
+    // Foxkit's menu bar item. Only ever used on the main thread.
+    static STATUS_ITEM: RefCell<Option<Retained<NSStatusItem>>> = const { RefCell::new(None) };
 }
 
-fn highlight_icon(on: bool) {
-    ICON_BUTTON.with(|button| {
-        if let Some(button) = button.borrow().as_ref() {
-            let button: &AnyObject = button;
-            // SAFETY: the status bar button is an NSButton, which has highlight:.
-            let responds: bool = unsafe { msg_send![button, respondsToSelector: sel!(highlight:)] };
-            if responds {
-                let _: () = unsafe { msg_send![button, highlight: on] };
-            }
-        }
-    });
+/// Keeps Foxkit's menu bar item, for placing the panel under it. Call on the main thread.
+pub fn remember_status_item(item: Retained<NSStatusItem>) {
+    STATUS_ITEM.with(|stored| *stored.borrow_mut() = Some(item));
 }
 
-/// Shows the menu bar icon as no longer pressed. Call on the main thread when the panel hides.
-pub fn release_icon() {
-    highlight_icon(false);
-}
-
-/// The menu bar icon's frame in screen points: the status bar window the click came from.
-/// Failing that, a point at the mouse, just under the menu bar of its screen.
+/// The menu bar icon's frame in screen points. Failing that, a point at the mouse, just under
+/// the menu bar of its screen.
 fn icon_frame(mtm: MainThreadMarker) -> NSRect {
-    let status_window = NSApplication::sharedApplication(mtm)
-        .currentEvent()
-        .and_then(|event| event.window(mtm))
-        .filter(|window| {
-            window
-                .class()
-                .name()
-                .to_bytes()
-                .ends_with(b"StatusBarWindow")
-        });
-    ICON_BUTTON.with(|button| {
-        *button.borrow_mut() = status_window
-            .as_ref()
-            .and_then(|window| window.contentView());
-    });
-    let from_click = status_window.map(|window| window.frame());
-    from_click.unwrap_or_else(|| {
+    let from_item = STATUS_ITEM
+        .with(|item| item.borrow().as_ref().and_then(|item| item.button(mtm)))
+        .and_then(|button| button.window())
+        .map(|window| window.frame());
+    from_item.unwrap_or_else(|| {
         let mouse = NSEvent::mouseLocation();
         let below_menu_bar = screen_at(mtm, mouse)
             .map(|screen| screen.visibleFrame())

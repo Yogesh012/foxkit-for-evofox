@@ -27,7 +27,24 @@ const GAP: f64 = 6.0;
 pub struct PanelHidden(Mutex<Option<Instant>>);
 
 pub fn install(app: &AppHandle) -> tauri::Result<()> {
-    TrayIconBuilder::with_id("foxkit")
+    watch_main(app);
+    install_tray(app)
+}
+
+fn watch_main(app: &AppHandle) {
+    if let Some(main) = app.get_webview_window(MAIN) {
+        let handle = app.clone();
+        main.on_window_event(move |event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                hide_main(&handle);
+            }
+        });
+    }
+}
+
+fn install_tray(app: &AppHandle) -> tauri::Result<()> {
+    let tray = TrayIconBuilder::with_id("foxkit")
         .icon(Image::from_bytes(TRAY_ICON)?)
         .icon_as_template(true)
         .tooltip("Foxkit")
@@ -43,6 +60,12 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
             }
         })
         .build(app)?;
+    #[cfg(target_os = "macos")]
+    tray.with_inner_tray_icon(|inner| {
+        if let Some(item) = inner.ns_status_item() {
+            crate::floating_panel::remember_status_item(item);
+        }
+    })?;
     if let Some(panel) = app.get_webview_window(PANEL) {
         #[cfg(target_os = "macos")]
         if let Ok(window) = panel.ns_window() {
@@ -69,15 +92,6 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
         panel.on_window_event(move |event| {
             if let WindowEvent::Focused(false) = event {
                 hide_panel(&handle);
-            }
-        });
-    }
-    if let Some(main) = app.get_webview_window(MAIN) {
-        let handle = app.clone();
-        main.on_window_event(move |event| {
-            if let WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close();
-                hide_main(&handle);
             }
         });
     }
@@ -141,8 +155,6 @@ fn hide_panel(app: &AppHandle) {
     if let Some(panel) = app.get_webview_window(PANEL) {
         let _ = panel.hide();
     }
-    #[cfg(target_os = "macos")]
-    let _ = app.run_on_main_thread(crate::floating_panel::release_icon);
     *app.state::<PanelHidden>()
         .0
         .lock()
