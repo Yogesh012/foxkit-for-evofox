@@ -1,0 +1,36 @@
+name: Something doesn't work
+description: A setting, effect or device that doesn't behave as expected.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device
+      description: Model, and the batch if you know it (it's on the label or the box).
+      placeholder: Ronin TKL Wireless, FP batch
+    validations:
+      required: true
+  - type: dropdown
+    id: connection
+    attributes:
+      label: Connection
+      options:
+        - USB cable
+        - 2.4 GHz receiver
+        - Bluetooth
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Foxkit and macOS versions
+      placeholder: Foxkit 0.1.0, macOS 15.1
+    validations:
+      required: true

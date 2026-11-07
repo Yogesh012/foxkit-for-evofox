@@ -1,0 +1,14 @@
+name: Idea or new device
+description: Suggest a feature, or ask for a device to be supported.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you'd like
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device, if it's about one
