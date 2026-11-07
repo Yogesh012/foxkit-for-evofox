@@ -1,0 +1,389 @@
+/* The window behind this is a dark, translucent macOS material, so the page itself has no
+   background and every surface is a light tint over it. */
+:root {
+  color-scheme: dark;
+  --text: rgba(255, 255, 255, 0.92);
+  --muted: rgba(255, 255, 255, 0.55);
+  --tile: rgba(255, 255, 255, 0.07);
+  --control: rgba(255, 255, 255, 0.12);
+  --control-hover: rgba(255, 255, 255, 0.2);
+  --selected: #f07a2b;
+  --selected-text: #1c0c05;
+  --low: #ff6b5e;
+  --charging: #52d36a;
+  --problem: #ff8a8d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: transparent;
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
+}
+
+body {
+  color: var(--text);
+  font: 13px/1.35 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+}
+
+#panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+}
+
+.tile {
+  background: var(--tile);
+  border-radius: 12px;
+  padding: 10px;
+}
+
+h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  border: 0;
+  cursor: default;
+}
+
+/* Selection changes at once, as in macOS's own controls, and selected buttons keep their
+   colour under the mouse. */
+
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--selected);
+  outline-offset: 2px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* Devices */
+.device {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 2px;
+}
+
+.device + .device {
+  margin-top: 6px;
+}
+
+.device-icon {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  padding: 5px;
+  border-radius: 50%;
+  background: var(--control);
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.device.absent .device-icon {
+  opacity: 0.45;
+}
+
+.device-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.device-name {
+  font-weight: 600;
+}
+
+.device-state {
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.device-state.problem {
+  color: var(--problem);
+}
+
+.battery {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.battery-shape {
+  position: relative;
+  width: 24px;
+  height: 12px;
+  border: 1.5px solid var(--muted);
+  border-radius: 3.5px;
+  padding: 1px;
+}
+
+.battery-shape::after {
+  content: "";
+  position: absolute;
+  right: -4px;
+  top: 3px;
+  width: 2px;
+  height: 4px;
+  border-radius: 0 1px 1px 0;
+  background: var(--muted);
+}
+
+.battery-level {
+  height: 100%;
+  border-radius: 1.5px;
+  background: var(--text);
+}
+
+.battery.low .battery-level {
+  background: var(--low);
+}
+
+.battery.charging .battery-level {
+  background: var(--charging);
+}
+
+.bolt {
+  width: 9px;
+  height: 12px;
+  fill: var(--charging);
+}
+
+/* Music lighting */
+.tile-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.pill {
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: var(--control);
+  font-weight: 600;
+}
+
+.pill:hover:not(:disabled):not(.on) {
+  background: var(--control-hover);
+}
+
+.pill.on {
+  background: var(--selected);
+  color: var(--selected-text);
+}
+
+.chips {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.chip {
+  position: relative;
+  z-index: 1;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--control);
+  font-size: 12px;
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.chip:hover:not(:disabled):not([aria-pressed="true"]) {
+  background: var(--control-hover);
+}
+
+.chip[aria-pressed="true"] {
+  background: transparent;
+  color: var(--selected-text);
+}
+
+/* One highlight per group, behind the buttons, that slides to the selected one. */
+.indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  border-radius: 999px;
+  background: var(--selected);
+  pointer-events: none;
+  transition:
+    transform 0.26s cubic-bezier(0.3, 0.9, 0.3, 1),
+    width 0.26s cubic-bezier(0.3, 0.9, 0.3, 1),
+    height 0.26s cubic-bezier(0.3, 0.9, 0.3, 1);
+}
+
+.indicator.instant {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .indicator {
+    transition: none;
+  }
+}
+
+.row-label {
+  margin: 10px 0 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.segments {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 3px;
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--control);
+}
+
+.segment {
+  position: relative;
+  z-index: 1;
+  padding: 3px 0;
+  border-radius: 6px;
+  background: transparent;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  transition: color 0.2s ease;
+}
+
+.segment[aria-pressed="true"] {
+  color: var(--selected-text);
+}
+
+.segments .indicator {
+  border-radius: 6px;
+}
+
+.swatches {
+  position: relative;
+  display: flex;
+  gap: 8px;
+}
+
+.swatch {
+  position: relative;
+  z-index: 1;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+
+/* For colours the highlight is a ring around the circle. */
+.swatches .indicator {
+  border: 2px solid var(--text);
+  border-radius: 50%;
+  background: transparent;
+}
+
+.swatch-0 { background: #ff3b30; }
+.swatch-1 { background: #34c759; }
+.swatch-2 { background: #0a84ff; }
+.swatch-3 { background: #ffd60a; }
+.swatch-4 { background: #ff2dc4; }
+.swatch-5 { background: #32d6e6; }
+.swatch-6 { background: #ffffff; }
+.swatch-7 { background: linear-gradient(90deg, #ff3b30, #34c759, #0a84ff, #ffd60a, #ff2dc4); }
+
+.note,
+.message {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.message.problem {
+  color: var(--problem);
+}
+
+button:disabled {
+  opacity: 0.5;
+}
+
+/* Footer */
+.footer {
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+}
+
+.row-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 7px;
+  background: transparent;
+  text-align: left;
+}
+
+.row-button:hover {
+  background: var(--control);
+}
+
+.switch-row input {
+  appearance: none;
+  position: relative;
+  width: 30px;
+  height: 18px;
+  margin: 0;
+  border-radius: 999px;
+  background: var(--control-hover);
+  transition: background 0.15s;
+}
+
+.switch-row input::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffffff;
+  transition: transform 0.15s;
+}
+
+.switch-row input:checked {
+  background: var(--selected);
+}
+
+.switch-row input:checked::before {
+  transform: translateX(12px);
+}

@@ -121,6 +121,9 @@ pub fn is_settings_channel(info: &DeviceInfo) -> bool {
     info.vendor_id() == VID && info.usage_page() == USAGE_PAGE && info.usage() == USAGE
 }
 
+// Part of the name it's listed under on Bluetooth.
+pub const BLUETOOTH_NAME: &str = "Ronin";
+
 pub fn is_this_device(info: &DeviceInfo) -> bool {
     info.vendor_id() == VID
 }

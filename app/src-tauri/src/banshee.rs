@@ -28,7 +28,7 @@ const DEBOUNCE_MAX: u8 = 20;
 const BATTERY_CHARGING_BIT: u8 = 0x80;
 const BATTERY_MAX_PERCENT: u8 = 100;
 // Listed under this name when connected over Bluetooth, with a different vendor ID.
-const BLUETOOTH_NAME: &str = "Banshee";
+pub const BLUETOOTH_NAME: &str = "Banshee";
 
 type DpiTable = [u8; DPI_TABLE_BYTES];
 

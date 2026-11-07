@@ -3,8 +3,13 @@
 mod audio;
 mod banshee;
 mod bars;
+mod battery;
 mod devices;
 mod dpi_table;
+#[cfg(target_os = "macos")]
+mod floating_panel;
+mod login;
+mod menu_bar;
 mod ronin;
 
 use std::fs;
@@ -85,6 +90,86 @@ fn read_devices(hid: tauri::State<'_, Hid>, bars: tauri::State<'_, Bars>) -> dev
     let keyboard_busy = bars.is_active();
     let mut api = hid.0.lock().unwrap_or_else(PoisonError::into_inner);
     devices::read_all(&mut api, keyboard_busy)
+}
+
+// The mouse as the panel last read it, shown while the bars run instead of reading it again.
+#[derive(Default)]
+struct LastMouse(Mutex<Option<battery::PanelDevice>>);
+
+#[derive(serde::Serialize)]
+struct PanelDevices {
+    keyboard: battery::PanelDevice,
+    mouse: battery::PanelDevice,
+}
+
+fn bars_report_now(bars: &Bars) -> Option<bars::Report> {
+    bars.0
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .as_ref()
+        .map(bars::Running::report)
+}
+
+/// The devices and their batteries, for the menu bar panel. While the bars run it reads
+/// nothing over HID: looking for devices competes with the frames going to the keyboard.
+#[tauri::command(async)]
+fn panel_devices(
+    hid: tauri::State<'_, Hid>,
+    bars: tauri::State<'_, Bars>,
+    last_mouse: tauri::State<'_, LastMouse>,
+) -> PanelDevices {
+    let accessories = battery::accessories();
+    let mut last_mouse = last_mouse.0.lock().unwrap_or_else(PoisonError::into_inner);
+    if bars.is_active() {
+        let report = bars_report_now(&bars);
+        let during_bars = report.as_ref().and_then(|report| {
+            report
+                .keyboard_connection
+                .map(|connection| (connection, report.keyboard_battery))
+        });
+        let mouse = match battery::mouse(&devices::Reading::NotFound, &accessories) {
+            battery::PanelDevice::NotConnected => last_mouse
+                .clone()
+                .unwrap_or(battery::PanelDevice::NotConnected),
+            on_bluetooth => on_bluetooth,
+        };
+        return PanelDevices {
+            keyboard: battery::keyboard(&devices::Reading::Busy, during_bars, &accessories),
+            mouse,
+        };
+    }
+    let devices = {
+        let mut api = hid.0.lock().unwrap_or_else(PoisonError::into_inner);
+        devices::read_all(&mut api, false)
+    };
+    let mouse = battery::mouse(&devices.mouse, &accessories);
+    *last_mouse = Some(mouse.clone());
+    PanelDevices {
+        keyboard: battery::keyboard(&devices.keyboard, None, &accessories),
+        mouse,
+    }
+}
+
+#[derive(serde::Serialize)]
+struct PanelMusic {
+    bars: Option<bars::Report>,
+    style: bars::Style,
+}
+
+/// The music lighting part of the panel. Reads no device, so it's quick.
+#[tauri::command(async)]
+fn panel_music(bars: tauri::State<'_, Bars>, style: tauri::State<'_, LastStyle>) -> PanelMusic {
+    PanelMusic {
+        bars: bars_report_now(&bars),
+        style: *style.0.lock().unwrap_or_else(PoisonError::into_inner),
+    }
+}
+
+/// Picks the style the next run starts on.
+#[tauri::command(async)]
+fn set_style(app: AppHandle, last_style: tauri::State<'_, LastStyle>, style: bars::Style) {
+    *last_style.0.lock().unwrap_or_else(PoisonError::into_inner) = style;
+    save_style(&app, style);
 }
 
 #[tauri::command(async)]
@@ -209,6 +294,16 @@ fn stop_bars(bars: tauri::State<'_, Bars>) -> Option<bars::Report> {
 }
 
 #[tauri::command(async)]
+fn launch_at_login() -> bool {
+    login::is_enabled()
+}
+
+#[tauri::command(async)]
+fn set_launch_at_login(enabled: bool) -> Result<bool, String> {
+    login::set(enabled)
+}
+
+#[tauri::command(async)]
 fn shortcut_problem(problem: tauri::State<'_, ShortcutProblem>) -> Option<String> {
     problem
         .0
@@ -262,6 +357,16 @@ fn main() {
         return;
     }
 
+    // Prints the accessory batteries macOS lists, which is where Bluetooth battery comes from.
+    if std::env::args().any(|arg| arg == "--battery") {
+        let accessories = battery::accessories();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&accessories).expect("batteries serialize")
+        );
+        return;
+    }
+
     // Prints audio levels for this many seconds, without touching the keyboard.
     let args: Vec<String> = std::env::args().collect();
     if let Some(seconds) = args
@@ -286,6 +391,8 @@ fn main() {
         .manage(KeyboardWatch::default())
         .manage(ShortcutProblem::default())
         .manage(LastStyle::default())
+        .manage(menu_bar::PanelHidden::default())
+        .manage(LastMouse::default())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
@@ -298,6 +405,12 @@ fn main() {
                 .build(),
         )
         .setup(|app| {
+            menu_bar::install(app.handle())?;
+            if login::opened_at_login() {
+                menu_bar::hide_main(app.handle());
+            } else {
+                menu_bar::show_main(app.handle());
+            }
             *app.state::<LastStyle>()
                 .0
                 .lock()
@@ -317,6 +430,9 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             read_devices,
+            panel_devices,
+            panel_music,
+            set_style,
             change_mouse,
             change_keyboard,
             keyboard_report,
@@ -324,14 +440,22 @@ fn main() {
             bars_report,
             change_bars,
             stop_bars,
-            shortcut_problem
+            shortcut_problem,
+            launch_at_login,
+            set_launch_at_login,
+            menu_bar::open_main,
+            menu_bar::fit_panel,
+            menu_bar::quit
         ])
         .build(tauri::generate_context!())
         .expect("the window should open")
-        .run(|app, event| {
+        .run(|app, event| match event {
             // Closing the app ends the bars and puts the keyboard's lighting back.
-            if let tauri::RunEvent::Exit = event {
+            tauri::RunEvent::Exit => {
                 app.state::<Bars>().stop();
             }
+            // Opened again from Finder or the Dock while running.
+            tauri::RunEvent::Reopen { .. } => menu_bar::show_main(app),
+            _ => {}
         });
 }

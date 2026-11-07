@@ -10,16 +10,40 @@
     "withGlobalTauri": true,
     "windows": [
       {
+        "label": "main",
         "title": "Foxkit",
         "width": 820,
         "height": 620,
         "minWidth": 560,
-        "minHeight": 420
+        "minHeight": 420,
+        "visible": false
+      },
+      {
+        "label": "panel",
+        "url": "panel.html",
+        "title": "Foxkit",
+        "width": 320,
+        "height": 400,
+        "visible": false,
+        "decorations": false,
+        "transparent": true,
+        "resizable": false,
+        "skipTaskbar": true,
+        "shadow": true,
+        "acceptFirstMouse": true,
+        "windowEffects": {
+          "effects": [
+            "hudWindow"
+          ],
+          "state": "active",
+          "radius": 14
+        }
       }
     ],
     "security": {
       "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; style-src 'self'; script-src 'self'"
-    }
+    },
+    "macOSPrivateApi": true
   },
   "bundle": {
     "active": true,
