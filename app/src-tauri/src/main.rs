@@ -8,6 +8,7 @@ mod devices;
 mod dpi_table;
 #[cfg(target_os = "macos")]
 mod floating_panel;
+mod login;
 mod menu_bar;
 mod ronin;
 
@@ -17,13 +18,10 @@ use std::thread;
 
 use hidapi::{HidApi, HidDevice};
 use tauri::{AppHandle, Manager};
-use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
 const BARS_SHORTCUT: (Modifiers, Code) = (Modifiers::CONTROL.union(Modifiers::ALT), Code::KeyM);
 const STYLE_FILE: &str = "music-style.json";
-// Given at login, where Foxkit starts in the menu bar only.
-const HIDDEN_ARG: &str = "--hidden";
 
 // hidapi allows one instance per process, and each device takes one request at a time.
 struct Hid(Mutex<HidApi>);
@@ -296,20 +294,13 @@ fn stop_bars(bars: tauri::State<'_, Bars>) -> Option<bars::Report> {
 }
 
 #[tauri::command(async)]
-fn launch_at_login(app: AppHandle) -> bool {
-    app.autolaunch().is_enabled().unwrap_or(false)
+fn launch_at_login() -> bool {
+    login::is_enabled()
 }
 
 #[tauri::command(async)]
-fn set_launch_at_login(app: AppHandle, enabled: bool) -> Result<bool, String> {
-    let launcher = app.autolaunch();
-    let changed = if enabled {
-        launcher.enable()
-    } else {
-        launcher.disable()
-    };
-    changed.map_err(|error| format!("Couldn't change launch at login: {error}"))?;
-    launcher.is_enabled().map_err(|error| error.to_string())
+fn set_launch_at_login(enabled: bool) -> Result<bool, String> {
+    login::set(enabled)
 }
 
 #[tauri::command(async)]
@@ -402,10 +393,6 @@ fn main() {
         .manage(LastStyle::default())
         .manage(menu_bar::PanelHidden::default())
         .manage(LastMouse::default())
-        .plugin(tauri_plugin_autostart::init(
-            MacosLauncher::LaunchAgent,
-            Some(vec![HIDDEN_ARG]),
-        ))
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
@@ -419,7 +406,7 @@ fn main() {
         )
         .setup(|app| {
             menu_bar::install(app.handle())?;
-            if std::env::args().any(|arg| arg == HIDDEN_ARG) {
+            if login::opened_at_login() {
                 menu_bar::hide_main(app.handle());
             } else {
                 menu_bar::show_main(app.handle());
