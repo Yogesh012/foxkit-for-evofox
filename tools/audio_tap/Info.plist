@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>local.foxkit.audio-tap</string>
+    <string>io.github.yogesh012.foxkit.audio-tap</string>
     <key>CFBundleName</key>
     <string>Foxkit Audio Tap</string>
     <key>CFBundleExecutable</key>

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2c2c30"/>
+      <stop offset="1" stop-color="#111113"/>
+    </linearGradient>
+    <linearGradient id="bars" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffa048"/>
+      <stop offset="1" stop-color="#e65a16"/>
+    </linearGradient>
+    <clipPath id="head">
+      <polygon points="283.1,255.6 420.4,402.1 603.6,402.1 740.9,255.6 750.0,530.3 512.0,768.4 274.0,530.3"/>
+    </clipPath>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#background)"/>
+  <g clip-path="url(#head)">
+    <rect x="280.8" y="209.9" width="50.4" height="595.1" fill="url(#bars)"/>
+    <rect x="349.5" y="209.9" width="50.4" height="595.1" fill="url(#bars)"/>
+    <rect x="418.2" y="209.9" width="50.4" height="595.1" fill="url(#bars)"/>
+    <rect x="486.8" y="209.9" width="50.4" height="595.1" fill="url(#bars)"/>
+    <rect x="555.5" y="209.9" width="50.4" height="595.1" fill="url(#bars)"/>
+    <rect x="624.2" y="209.9" width="50.4" height="595.1" fill="url(#bars)"/>
+    <rect x="692.8" y="209.9" width="50.4" height="595.1" fill="url(#bars)"/>
+    <polygon points="411.3,667.6 612.7,667.6 512.0,782.1" fill="#ffffff"/>
+  </g>
+</svg>
