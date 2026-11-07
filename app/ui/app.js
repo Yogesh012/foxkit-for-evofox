@@ -116,7 +116,7 @@ function keyboardDetails(status) {
   const startBars = element("button", "Start audio bars");
   startBars.type = "button";
   startBars.addEventListener("click", beginBars);
-  nodes.push(element("h3", "Audio bars"), startBars, element("p", "Ctrl+Option+M starts and stops them while this app is open.", "note"));
+  nodes.push(element("h3", "Audio bars"), startBars, element("p", "Ctrl+Option+M starts and stops them while Foxkit is running, including from the menu bar.", "note"));
   if (status.effectNumber === null) {
     startBars.disabled = true;
     startBars.dataset.locked = "true";
@@ -203,7 +203,14 @@ async function finishBars(report) {
   await refresh();
 }
 
+// Closing the window only hides it, as Foxkit keeps running in the menu bar, so checks
+// pause until it's back.
+function hidden() {
+  return document.visibilityState === "hidden";
+}
+
 async function pollBars() {
+  if (hidden()) return;
   const report = await invoke("bars_report");
   if (barsTimer === null) return;
   if (report === null) {
@@ -376,7 +383,7 @@ function showKeyboard(status) {
 // Picks up what happened outside the window: the Mac-wide shortcut, and changes made on the
 // keyboard itself.
 async function watchKeyboard() {
-  if (busy || barsTimer !== null) return;
+  if (busy || barsTimer !== null || hidden()) return;
   const problem = await invoke("shortcut_problem");
   if (problem !== null) {
     keyboardMessage = { text: problem, className: "problem" };
@@ -436,3 +443,6 @@ refreshButton.addEventListener("click", () => {
 });
 refresh();
 setInterval(watchKeyboard, KEYBOARD_WATCH_MS);
+document.addEventListener("visibilitychange", () => {
+  if (!hidden() && !busy && barsTimer === null) refresh();
+});

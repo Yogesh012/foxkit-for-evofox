@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Foxkit</title>
+    <link rel="stylesheet" href="panel.css" />
+    <script src="panel.js" defer></script>
+  </head>
+  <body>
+    <main id="panel">
+      <section class="tile" aria-label="Devices">
+        <div class="device" id="keyboard">
+          <svg class="device-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="2" y="6" width="20" height="12" rx="2.5" />
+            <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10" />
+          </svg>
+          <div class="device-text">
+            <span class="device-name">Ronin TKL</span>
+            <span class="device-state">Reading…</span>
+          </div>
+          <div class="battery" hidden></div>
+        </div>
+        <div class="device" id="mouse">
+          <svg class="device-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="6" y="3" width="12" height="18" rx="6" />
+            <path d="M12 7v3" />
+          </svg>
+          <div class="device-text">
+            <span class="device-name">Banshee 2</span>
+            <span class="device-state">Reading…</span>
+          </div>
+          <div class="battery" hidden></div>
+        </div>
+      </section>
+
+      <section class="tile" aria-labelledby="music-title">
+        <div class="tile-head">
+          <h2 id="music-title">Music lighting</h2>
+          <button type="button" id="toggle" class="pill">Start</button>
+        </div>
+        <div class="chips" id="styles" role="group" aria-label="Style"></div>
+        <div id="look" hidden>
+          <div class="row-label">Brightness</div>
+          <div class="segments" id="brightness" role="group" aria-label="Brightness"></div>
+          <div class="row-label">Colour</div>
+          <div class="swatches" id="colours" role="group" aria-label="Colour"></div>
+          <p class="note">These apply to the music lighting only.</p>
+        </div>
+        <p class="message" id="message" role="status" hidden></p>
+      </section>
+
+      <footer class="tile footer">
+        <button type="button" class="row-button" id="open">Open Foxkit</button>
+        <label class="row-button switch-row">
+          <span>Launch at login</span>
+          <input type="checkbox" id="login" role="switch" />
+        </label>
+        <button type="button" class="row-button" id="quit">Quit Foxkit</button>
+      </footer>
+    </main>
+  </body>
+</html>

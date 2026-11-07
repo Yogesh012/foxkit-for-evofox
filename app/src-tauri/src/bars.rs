@@ -15,6 +15,7 @@ use rustfft::{Fft, FftPlanner};
 use serde::{Deserialize, Serialize};
 
 use crate::audio::AudioSource;
+use crate::battery::{self, Battery};
 use crate::ronin;
 
 const FFT_SIZE: usize = 2048;
@@ -484,6 +485,9 @@ pub struct Report {
     pub rows_lit: [f64; ROWS.len()],
     /// What the keyboard last reported by itself while frames were going.
     pub keyboard_effect: Option<String>,
+    /// How the keyboard is connected, and its battery from the reports it sends by itself.
+    pub keyboard_connection: Option<&'static str>,
+    pub keyboard_battery: Option<Battery>,
     pub look: Look,
     /// The effect shortcut ended the run, rather than Stop.
     pub ended_by_keyboard: bool,
@@ -512,6 +516,8 @@ impl Running {
         let stop = Arc::new(AtomicBool::new(false));
         let report = Arc::new(Mutex::new(Report {
             look,
+            keyboard_connection: Some(status.connection),
+            keyboard_battery: battery::keyboard_status_battery(&status),
             ..Report::default()
         }));
         let look = Arc::new(Mutex::new(look));
@@ -549,11 +555,18 @@ impl Running {
         self.stop.store(true, Ordering::Relaxed);
     }
 
+    /// How the run is going. The look is the latest one set, which the frames pick up on their
+    /// next pass, so a change shows here straight away.
     pub fn report(&self) -> Report {
-        self.report
+        let mut report = self
+            .report
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
-            .clone()
+            .clone();
+        if report.phase != Phase::Stopped {
+            report.look = *self.look.lock().unwrap_or_else(PoisonError::into_inner);
+        }
+        report
     }
 
     /// Stops the bars and waits for the keyboard's lighting to be restored.
@@ -726,6 +739,9 @@ fn stream(
             report.look = current(look);
             if let Some(status) = &seen {
                 report.keyboard_effect = Some(status.effect.clone());
+                if let Some(battery) = battery::keyboard_status_battery(status) {
+                    report.keyboard_battery = Some(battery);
+                }
             }
         });
         if Instant::now() >= next_log {
