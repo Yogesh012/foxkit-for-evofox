@@ -1,0 +1,5 @@
+# Build output
+/app/src-tauri/target/
+/app/src-tauri/gen/
+/tools/audio_tap/*.app/
+.DS_Store
