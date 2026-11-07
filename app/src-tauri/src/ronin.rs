@@ -39,8 +39,26 @@ pub const COLOUR_MAX: u8 = 7;
 
 /// Effects 1 to 20, in order.
 const EFFECT_NAMES: [&str; 20] = [
-    "Flow", "Starry", "Ripple", "Laser", "Spectrum", "Kaleidoscope", "Constant", "Breath", "Cross Flow", "Float",
-    "Snow", "Jianghua", "Snake", "Tornado", "Impact", "Rain", "Windmill", "Sine", "Horse", "Cross",
+    "Flow",
+    "Starry",
+    "Ripple",
+    "Laser",
+    "Spectrum",
+    "Kaleidoscope",
+    "Constant",
+    "Breath",
+    "Cross Flow",
+    "Float",
+    "Snow",
+    "Jianghua",
+    "Snake",
+    "Tornado",
+    "Impact",
+    "Rain",
+    "Windmill",
+    "Sine",
+    "Horse",
+    "Cross",
 ];
 
 /// RGB for each of the 108 LED slots.
@@ -50,7 +68,13 @@ pub type Frame = [u8; FRAME_BYTES];
 #[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Change {
-    Lighting { effect: u8, brightness: u8, speed: u8, direction: u8, colour: u8 },
+    Lighting {
+        effect: u8,
+        brightness: u8,
+        speed: u8,
+        direction: u8,
+        colour: u8,
+    },
     LightsOff,
 }
 
@@ -58,9 +82,19 @@ impl Change {
     /// The same change on the next effect, going back to the first after the last.
     pub fn with_next_effect(self) -> Self {
         match self {
-            Self::Lighting { effect, brightness, speed, direction, colour } => {
-                Self::Lighting { effect: effect % EFFECT_NAMES.len() as u8 + 1, brightness, speed, direction, colour }
-            }
+            Self::Lighting {
+                effect,
+                brightness,
+                speed,
+                direction,
+                colour,
+            } => Self::Lighting {
+                effect: effect % EFFECT_NAMES.len() as u8 + 1,
+                brightness,
+                speed,
+                direction,
+                colour,
+            },
             Self::LightsOff => self,
         }
     }
@@ -107,18 +141,29 @@ fn status_request() -> [u8; PACKET + 1] {
 fn change_request(change: Change) -> Result<[u8; PACKET + 1], String> {
     match change {
         Change::LightsOff => Ok(packet(CMD_LIGHTS_OFF, &[0x01])),
-        Change::Lighting { effect, brightness, speed, direction, colour } => {
+        Change::Lighting {
+            effect,
+            brightness,
+            speed,
+            direction,
+            colour,
+        } => {
             // Effect 21 is off and 23 is custom, and those need their own commands.
             if !(1..=EFFECT_NAMES.len() as u8).contains(&effect) {
                 return Err(format!("Effect {effect} isn't one of the 20 effects."));
             }
             if !(1..=LEVEL_MAX).contains(&brightness) || !(1..=LEVEL_MAX).contains(&speed) {
-                return Err(format!("Brightness and speed have to be from 1 to {LEVEL_MAX}."));
+                return Err(format!(
+                    "Brightness and speed have to be from 1 to {LEVEL_MAX}."
+                ));
             }
             if direction > DIRECTION_MAX || colour > COLOUR_MAX {
                 return Err("That direction or colour isn't available.".to_string());
             }
-            Ok(packet(CMD_EFFECT, &[effect - 1, brightness - 1, speed - 1, direction, colour]))
+            Ok(packet(
+                CMD_EFFECT,
+                &[effect - 1, brightness - 1, speed - 1, direction, colour],
+            ))
         }
     }
 }
@@ -128,14 +173,19 @@ fn music_mode_request() -> [u8; PACKET + 1] {
 }
 
 fn frame_requests(frame: &Frame) -> impl Iterator<Item = [u8; PACKET + 1]> + '_ {
-    frame.chunks_exact(PAGE_BYTES).zip(CMD_FRAME_FIRST..).map(|(page, cmd)| packet(cmd, page))
+    frame
+        .chunks_exact(PAGE_BYTES)
+        .zip(CMD_FRAME_FIRST..)
+        .map(|(page, cmd)| packet(cmd, page))
 }
 
 fn parse_status(packet: &[u8], product_id: u16) -> Option<Status> {
     if packet.len() < STATUS_BYTES || packet[..4] != MAGIC || packet[4] != CMD_STATUS {
         return None;
     }
-    let effect_number = packet[14].checked_add(1).filter(|number| (1..=EFFECT_NAMES.len() as u8).contains(number));
+    let effect_number = packet[14]
+        .checked_add(1)
+        .filter(|number| (1..=EFFECT_NAMES.len() as u8).contains(number));
     Some(Status {
         connection: match product_id {
             PID_USB => "USB",
@@ -144,7 +194,12 @@ fn parse_status(packet: &[u8], product_id: u16) -> Option<Status> {
         },
         battery: packet[5],
         charging: packet[7] != 0,
-        firmware: format!("{}.{}.{}", packet[12] >> 4, packet[12] & 15, u16::from(packet[13] >> 4) * 10 + u16::from(packet[13] & 15)),
+        firmware: format!(
+            "{}.{}.{}",
+            packet[12] >> 4,
+            packet[12] & 15,
+            u16::from(packet[13] >> 4) * 10 + u16::from(packet[13] & 15)
+        ),
         effect: match (effect_number, packet[14]) {
             (Some(number), _) => EFFECT_NAMES[usize::from(number - 1)].to_string(),
             (None, EFFECT_CUSTOM) => "Custom".to_string(),
@@ -165,7 +220,13 @@ fn matches_change(status: &Status, change: Change) -> bool {
     match change {
         // Off can't be read back: the status keeps its last values.
         Change::LightsOff => true,
-        Change::Lighting { effect, brightness, speed, direction, colour } => {
+        Change::Lighting {
+            effect,
+            brightness,
+            speed,
+            direction,
+            colour,
+        } => {
             status.effect_number == Some(effect)
                 && status.brightness == brightness
                 && status.speed == speed
@@ -176,11 +237,15 @@ fn matches_change(status: &Status, change: Change) -> bool {
 }
 
 pub fn read_status(device: &HidDevice, product_id: u16) -> Result<Status, String> {
-    device.write(&status_request()).map_err(|error| format!("Status request failed: {error}"))?;
+    device
+        .write(&status_request())
+        .map_err(|error| format!("Status request failed: {error}"))?;
     let sent = Instant::now();
     let mut packet = [0; PACKET];
     while sent.elapsed() < REPLY_WAIT {
-        let size = device.read_timeout(&mut packet, READ_TIMEOUT_MS).map_err(|error| format!("Status read failed: {error}"))?;
+        let size = device
+            .read_timeout(&mut packet, READ_TIMEOUT_MS)
+            .map_err(|error| format!("Status read failed: {error}"))?;
         if let Some(status) = parse_status(&packet[..size], product_id) {
             return Ok(status);
         }
@@ -191,7 +256,9 @@ pub fn read_status(device: &HidDevice, product_id: u16) -> Result<Status, String
 /// Sends one change once, checks the keyboard took it, and returns the new status.
 pub fn apply(device: &HidDevice, product_id: u16, change: Change) -> Result<Status, String> {
     let request = change_request(change)?;
-    device.write(&request).map_err(|error| format!("Keyboard write failed: {error}"))?;
+    device
+        .write(&request)
+        .map_err(|error| format!("Keyboard write failed: {error}"))?;
     for _ in 0..CHECK_ATTEMPTS {
         sleep(CHECK_WAIT);
         let status = read_status(device, product_id)?;
@@ -204,7 +271,12 @@ pub fn apply(device: &HidDevice, product_id: u16, change: Change) -> Result<Stat
 
 /// The command that puts back this status's lighting. Custom and Music Rhythm have none.
 pub fn restore_change(status: &Status) -> Result<Change, String> {
-    let effect = status.effect_number.ok_or_else(|| format!("The keyboard is on {}. Pick an effect first, so it can be put back afterwards.", status.effect))?;
+    let effect = status.effect_number.ok_or_else(|| {
+        format!(
+            "The keyboard is on {}. Pick an effect first, so it can be put back afterwards.",
+            status.effect
+        )
+    })?;
     let change = Change::Lighting {
         effect,
         brightness: status.brightness,
@@ -217,7 +289,10 @@ pub fn restore_change(status: &Status) -> Result<Change, String> {
 }
 
 pub fn enter_music_mode(device: &HidDevice) -> Result<(), String> {
-    device.write(&music_mode_request()).map(|_| ()).map_err(|error| format!("Keyboard write failed: {error}"))
+    device
+        .write(&music_mode_request())
+        .map(|_| ())
+        .map_err(|error| format!("Keyboard write failed: {error}"))
 }
 
 /// Sends one frame and returns how many of its pages failed to send.
@@ -237,7 +312,9 @@ pub fn latest_reported(device: &HidDevice, product_id: u16) -> Result<Option<Sta
     let mut packet = [0; PACKET];
     let mut latest = None;
     loop {
-        let size = device.read_timeout(&mut packet, 0).map_err(|error| format!("Status read failed: {error}"))?;
+        let size = device
+            .read_timeout(&mut packet, 0)
+            .map_err(|error| format!("Status read failed: {error}"))?;
         if size == 0 {
             return Ok(latest);
         }
@@ -265,7 +342,13 @@ mod tests {
     }
 
     fn lighting(effect: u8, brightness: u8, speed: u8, direction: u8, colour: u8) -> Change {
-        Change::Lighting { effect, brightness, speed, direction, colour }
+        Change::Lighting {
+            effect,
+            brightness,
+            speed,
+            direction,
+            colour,
+        }
     }
 
     #[test]
@@ -279,7 +362,10 @@ mod tests {
     fn lighting_matches_the_confirmed_commands() {
         // Constant, confirmed on the keyboard.
         let request = change_request(lighting(7, 5, 3, 0, 0)).unwrap();
-        assert_eq!(&request[..11], &[0x00, 0xAA, 0x55, 0xCC, 0x33, 0x07, 0x06, 0x04, 0x02, 0x00, 0x00]);
+        assert_eq!(
+            &request[..11],
+            &[0x00, 0xAA, 0x55, 0xCC, 0x33, 0x07, 0x06, 0x04, 0x02, 0x00, 0x00]
+        );
         // The saved state the audio test restored.
         let request = change_request(lighting(9, 5, 3, 1, 7)).unwrap();
         assert_eq!(&request[5..11], &[0x07, 0x08, 0x04, 0x02, 0x01, 0x07]);
@@ -289,7 +375,10 @@ mod tests {
 
     #[test]
     fn lights_off_request() {
-        assert_eq!(&change_request(Change::LightsOff).unwrap()[5..8], &[0x05, 0x01, 0x00]);
+        assert_eq!(
+            &change_request(Change::LightsOff).unwrap()[5..8],
+            &[0x05, 0x01, 0x00]
+        );
     }
 
     #[test]
@@ -312,14 +401,22 @@ mod tests {
 
     #[test]
     fn only_the_three_allowed_commands_can_be_built() {
-        for request in [status_request(), change_request(Change::LightsOff).unwrap(), change_request(lighting(1, 1, 1, 0, 0)).unwrap(), music_mode_request()] {
+        for request in [
+            status_request(),
+            change_request(Change::LightsOff).unwrap(),
+            change_request(lighting(1, 1, 1, 0, 0)).unwrap(),
+            music_mode_request(),
+        ] {
             assert!([CMD_STATUS, CMD_LIGHTS_OFF, CMD_EFFECT].contains(&request[5]));
         }
     }
 
     #[test]
     fn music_mode_is_effect_aa() {
-        assert_eq!(&music_mode_request()[..7], &[0x00, 0xAA, 0x55, 0xCC, 0x33, 0x07, 0xAA]);
+        assert_eq!(
+            &music_mode_request()[..7],
+            &[0x00, 0xAA, 0x55, 0xCC, 0x33, 0x07, 0xAA]
+        );
     }
 
     #[test]
@@ -331,7 +428,10 @@ mod tests {
         let requests: Vec<_> = frame_requests(&frame).collect();
         assert_eq!(requests.len(), 6);
         for (page, request) in requests.iter().enumerate() {
-            assert_eq!(&request[..6], &[0x00, 0xAA, 0x55, 0xCC, 0x33, 0xF0 + page as u8]);
+            assert_eq!(
+                &request[..6],
+                &[0x00, 0xAA, 0x55, 0xCC, 0x33, 0xF0 + page as u8]
+            );
             assert_eq!(&request[6..60], &frame[page * 54..(page + 1) * 54]);
             assert!(request[60..].iter().all(|&byte| byte == 0));
         }
@@ -340,16 +440,39 @@ mod tests {
     #[test]
     fn only_normal_effects_can_be_restored() {
         let status = parse_status(&status_packet(9), PID_USB).unwrap();
-        assert!(matches!(restore_change(&status), Ok(Change::Lighting { effect: 10, brightness: 5, speed: 3, direction: 1, colour: 7 })));
+        assert!(matches!(
+            restore_change(&status),
+            Ok(Change::Lighting {
+                effect: 10,
+                brightness: 5,
+                speed: 3,
+                direction: 1,
+                colour: 7
+            })
+        ));
         for effect in [EFFECT_CUSTOM, EFFECT_MUSIC] {
-            assert!(restore_change(&parse_status(&status_packet(effect), PID_USB).unwrap()).is_err());
+            assert!(
+                restore_change(&parse_status(&status_packet(effect), PID_USB).unwrap()).is_err()
+            );
         }
     }
 
     #[test]
     fn next_effect_follows_the_list_and_wraps() {
-        assert!(matches!(lighting(14, 5, 3, 1, 7).with_next_effect(), Change::Lighting { effect: 15, brightness: 5, speed: 3, direction: 1, colour: 7 }));
-        assert!(matches!(lighting(20, 5, 3, 1, 7).with_next_effect(), Change::Lighting { effect: 1, .. }));
+        assert!(matches!(
+            lighting(14, 5, 3, 1, 7).with_next_effect(),
+            Change::Lighting {
+                effect: 15,
+                brightness: 5,
+                speed: 3,
+                direction: 1,
+                colour: 7
+            }
+        ));
+        assert!(matches!(
+            lighting(20, 5, 3, 1, 7).with_next_effect(),
+            Change::Lighting { effect: 1, .. }
+        ));
         assert!(change_request(lighting(20, 5, 3, 1, 7).with_next_effect()).is_ok());
     }
 
@@ -361,17 +484,37 @@ mod tests {
         assert_eq!(status.firmware, "0.0.14");
         assert_eq!(status.effect, "Constant");
         assert_eq!(status.effect_number, Some(7));
-        assert_eq!((status.brightness, status.speed, status.direction, status.colour), (5, 3, 1, 7));
+        assert_eq!(
+            (
+                status.brightness,
+                status.speed,
+                status.direction,
+                status.colour
+            ),
+            (5, 3, 1, 7)
+        );
     }
 
     #[test]
     fn special_effects_have_no_number() {
         let music = parse_status(&status_packet(EFFECT_MUSIC), PID_RECEIVER).unwrap();
-        assert_eq!((music.effect.as_str(), music.effect_number), ("Music Rhythm", None));
+        assert_eq!(
+            (music.effect.as_str(), music.effect_number),
+            ("Music Rhythm", None)
+        );
         let custom = parse_status(&status_packet(EFFECT_CUSTOM), PID_USB).unwrap();
-        assert_eq!((custom.effect.as_str(), custom.effect_number), ("Custom", None));
-        assert_eq!(parse_status(&status_packet(8), PID_USB).unwrap().effect, "Cross Flow");
-        assert_eq!(parse_status(&status_packet(0xFF), PID_USB).unwrap().effect, "Unknown (255)");
+        assert_eq!(
+            (custom.effect.as_str(), custom.effect_number),
+            ("Custom", None)
+        );
+        assert_eq!(
+            parse_status(&status_packet(8), PID_USB).unwrap().effect,
+            "Cross Flow"
+        );
+        assert_eq!(
+            parse_status(&status_packet(0xFF), PID_USB).unwrap().effect,
+            "Unknown (255)"
+        );
     }
 
     #[test]
@@ -387,14 +530,23 @@ mod tests {
         let status = parse_status(&status_packet(6), PID_USB).unwrap();
         assert!(matches_change(&status, lighting(7, 5, 3, 1, 7)));
         assert!(matches_change(&status, Change::LightsOff));
-        for change in [lighting(8, 5, 3, 1, 7), lighting(7, 4, 3, 1, 7), lighting(7, 5, 2, 1, 7), lighting(7, 5, 3, 0, 7), lighting(7, 5, 3, 1, 6)] {
+        for change in [
+            lighting(8, 5, 3, 1, 7),
+            lighting(7, 4, 3, 1, 7),
+            lighting(7, 5, 2, 1, 7),
+            lighting(7, 5, 3, 0, 7),
+            lighting(7, 5, 3, 1, 6),
+        ] {
             assert!(!matches_change(&status, change), "{change:?}");
         }
     }
 
     #[test]
     fn change_requests_parse_from_the_window() {
-        let change: Change = serde_json::from_str(r#"{"kind":"lighting","effect":7,"brightness":5,"speed":3,"direction":0,"colour":0}"#).unwrap();
+        let change: Change = serde_json::from_str(
+            r#"{"kind":"lighting","effect":7,"brightness":5,"speed":3,"direction":0,"colour":0}"#,
+        )
+        .unwrap();
         assert!(matches!(change, Change::Lighting { effect: 7, .. }));
         assert!(serde_json::from_str::<Change>(r#"{"kind":"factoryReset"}"#).is_err());
     }

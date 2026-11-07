@@ -63,7 +63,13 @@ const SOLID_PRESETS: [[f64; 3]; 7] = [
     [255.0, 255.0, 255.0],
 ];
 // Preset 8, spread across the columns.
-const GRADIENT: [[f64; 3]; 5] = [[255.0, 0.0, 0.0], [0.0, 255.0, 0.0], [0.0, 0.0, 255.0], [255.0, 255.0, 0.0], [255.0, 0.0, 255.0]];
+const GRADIENT: [[f64; 3]; 5] = [
+    [255.0, 0.0, 0.0],
+    [0.0, 255.0, 0.0],
+    [0.0, 0.0, 255.0],
+    [255.0, 255.0, 0.0],
+    [255.0, 0.0, 255.0],
+];
 // A change of look fades in over about 0.3 s.
 const FADE_FRAMES: u32 = 9;
 // The bass is these columns, up to about 220 Hz.
@@ -121,7 +127,11 @@ impl Paint {
     fn blend(from: &Self, to: &Self, share: f64) -> Self {
         let mix = |from: f64, to: f64| from + (to - from) * share;
         Self {
-            colours: std::array::from_fn(|column| std::array::from_fn(|channel| mix(from.colours[column][channel], to.colours[column][channel]))),
+            colours: std::array::from_fn(|column| {
+                std::array::from_fn(|channel| {
+                    mix(from.colours[column][channel], to.colours[column][channel])
+                })
+            }),
             brightness: mix(from.brightness, to.brightness),
         }
     }
@@ -139,7 +149,13 @@ struct Fade {
 impl Fade {
     fn new(look: Look) -> Self {
         let paint = look.paint();
-        Self { look, from: paint, to: paint, shown: paint, frames_left: 0 }
+        Self {
+            look,
+            from: paint,
+            to: paint,
+            shown: paint,
+            frames_left: 0,
+        }
     }
 
     fn next(&mut self, look: Look) -> &Paint {
@@ -170,11 +186,17 @@ impl Look {
         if let Some(solid) = SOLID_PRESETS.get(usize::from(self.colour)) {
             return *solid;
         }
-        let position = if self.direction == 0 { column } else { COLUMNS - 1 - column };
+        let position = if self.direction == 0 {
+            column
+        } else {
+            COLUMNS - 1 - column
+        };
         let along = position as f64 * (GRADIENT.len() - 1) as f64 / (COLUMNS - 1) as f64;
         let stop = (along as usize).min(GRADIENT.len() - 2);
         let part = along - stop as f64;
-        std::array::from_fn(|channel| GRADIENT[stop][channel] + (GRADIENT[stop + 1][channel] - GRADIENT[stop][channel]) * part)
+        std::array::from_fn(|channel| {
+            GRADIENT[stop][channel] + (GRADIENT[stop + 1][channel] - GRADIENT[stop][channel]) * part
+        })
     }
 }
 
@@ -191,7 +213,9 @@ impl Spectrum {
     fn new() -> Self {
         Self {
             fft: FftPlanner::new().plan_fft_forward(FFT_SIZE),
-            window: (0..FFT_SIZE).map(|n| 0.5 - 0.5 * (2.0 * PI * n as f64 / (FFT_SIZE - 1) as f64).cos()).collect(),
+            window: (0..FFT_SIZE)
+                .map(|n| 0.5 - 0.5 * (2.0 * PI * n as f64 / (FFT_SIZE - 1) as f64).cos())
+                .collect(),
             peak: [f64::NEG_INFINITY; COLUMNS],
             quiet: [f64::INFINITY; COLUMNS],
             levels: [0.0; COLUMNS],
@@ -199,8 +223,11 @@ impl Spectrum {
     }
 
     fn update(&mut self, samples: &[f32], rate: u32) -> &Levels {
-        let mut buffer: Vec<Complex<f64>> =
-            samples.iter().zip(&self.window).map(|(&sample, window)| Complex::new(f64::from(sample) * window, 0.0)).collect();
+        let mut buffer: Vec<Complex<f64>> = samples
+            .iter()
+            .zip(&self.window)
+            .map(|(&sample, window)| Complex::new(f64::from(sample) * window, 0.0))
+            .collect();
         self.fft.process(&mut buffer);
         let bands = band_magnitudes(&buffer[..=FFT_SIZE / 2], rate);
         // Each column spans its own recent quietest to loudest, on a log scale, so higher
@@ -209,17 +236,26 @@ impl Spectrum {
         let logs = bands.map(|band| band.max(SILENCE).ln());
         for column in 0..COLUMNS {
             self.peak[column] = (self.peak[column] - PEAK_FALL_PER_FRAME).max(logs[column]);
-            self.quiet[column] =
-                (self.quiet[column] + QUIET_RISE_PER_FRAME).min(logs[column]).max(self.peak[column] - MAX_SPAN);
+            self.quiet[column] = (self.quiet[column] + QUIET_RISE_PER_FRAME)
+                .min(logs[column])
+                .max(self.peak[column] - MAX_SPAN);
         }
         let loudest = self.peak.iter().copied().fold(f64::NEG_INFINITY, f64::max);
-        let (lowest, highest) =
-            samples.iter().fold((f32::INFINITY, f32::NEG_INFINITY), |(low, high), &sample| (low.min(sample), high.max(sample)));
+        let (lowest, highest) = samples.iter().fold(
+            (f32::INFINITY, f32::NEG_INFINITY),
+            |(low, high), &sample| (low.min(sample), high.max(sample)),
+        );
         let silent = f64::from(highest) - f64::from(lowest) <= SILENCE;
         for column in 0..COLUMNS {
             let top = self.peak[column].max(loudest + BAND_FLOOR.ln());
             let span = (top - self.quiet[column]).max(MIN_SPAN);
-            let target = if silent { 0.0 } else { ((logs[column] - self.quiet[column]) / span).clamp(0.0, 1.0).powi(LEVEL_CURVE) };
+            let target = if silent {
+                0.0
+            } else {
+                ((logs[column] - self.quiet[column]) / span)
+                    .clamp(0.0, 1.0)
+                    .powi(LEVEL_CURVE)
+            };
             self.levels[column] = target.max(self.levels[column] - FALL_PER_FRAME);
         }
         &self.levels
@@ -234,14 +270,20 @@ fn band_magnitudes(bins: &[Complex<f64>], rate: u32) -> Levels {
     std::array::from_fn(|column| {
         let low = bin(column).min(bins.len() - 1);
         let high = bin(column + 1).max(low + 1).min(bins.len());
-        bins[low..high].iter().map(|value| value.norm()).fold(0.0, f64::max)
+        bins[low..high]
+            .iter()
+            .map(|value| value.norm())
+            .fold(0.0, f64::max)
     })
 }
 
 /// Share of columns that reach each row, from bottom to top.
 fn rows_lit(levels: &Levels) -> [f64; ROWS.len()] {
     std::array::from_fn(|height| {
-        let reached = levels.iter().filter(|&&level| level * ROWS.len() as f64 > height as f64 + 0.5).count();
+        let reached = levels
+            .iter()
+            .filter(|&&level| level * ROWS.len() as f64 > height as f64 + 0.5)
+            .count();
         reached as f64 / COLUMNS as f64
     })
 }
@@ -260,8 +302,12 @@ struct PreciseTiming(Retained<ProtocolObject<dyn NSObjectProtocol>>);
 
 impl PreciseTiming {
     fn begin() -> Self {
-        let options = NSActivityOptions::UserInitiatedAllowingIdleSystemSleep | NSActivityOptions::LatencyCritical;
-        Self(NSProcessInfo::processInfo().beginActivityWithOptions_reason(options, &NSString::from_str("Audio bars")))
+        let options = NSActivityOptions::UserInitiatedAllowingIdleSystemSleep
+            | NSActivityOptions::LatencyCritical;
+        Self(
+            NSProcessInfo::processInfo()
+                .beginActivityWithOptions_reason(options, &NSString::from_str("Audio bars")),
+        )
     }
 }
 
@@ -283,7 +329,8 @@ fn keys_frame(paint: &Paint, lit: impl Fn(usize, usize, usize) -> f64) -> ronin:
         for (position, &led) in row.iter().enumerate() {
             let column = key_column(position, row);
             let share = lit(height, column, led);
-            let colour = paint.colours[column].map(|channel| (channel * share * paint.brightness) as u8);
+            let colour =
+                paint.colours[column].map(|channel| (channel * share * paint.brightness) as u8);
             frame[3 * led..3 * led + 3].copy_from_slice(&colour);
         }
     }
@@ -295,12 +342,17 @@ fn bass_level(levels: &Levels) -> f64 {
 }
 
 fn treble_level(levels: &Levels) -> f64 {
-    levels[SPARK_FIRST_COLUMN..].iter().copied().fold(0.0, f64::max)
+    levels[SPARK_FIRST_COLUMN..]
+        .iter()
+        .copied()
+        .fold(0.0, f64::max)
 }
 
 fn bars_frame(levels: &Levels, paint: &Paint) -> ronin::Frame {
     // Share of each key that the bar covers, so bar tops can sit part-way up a key.
-    keys_frame(paint, |height, column, _| (levels[column] * ROWS.len() as f64 - height as f64).clamp(0.0, 1.0))
+    keys_frame(paint, |height, column, _| {
+        (levels[column] * ROWS.len() as f64 - height as f64).clamp(0.0, 1.0)
+    })
 }
 
 /// Every key together, as bright as the bass or a treble hit, whichever is stronger.
@@ -314,7 +366,9 @@ fn pulse_frame(levels: &Levels, treble_rise: f64, paint: &Paint) -> ronin::Frame
 fn glow_frame(levels: &Levels, rises: &Levels, paint: &Paint) -> ronin::Frame {
     keys_frame(paint, |_, column, _| {
         if column < BASS_COLUMNS {
-            (rises[column] * GLOW_BASS_GAIN).min(1.0).max(levels[column] * GLOW_BASS_LEVEL_SHARE)
+            (rises[column] * GLOW_BASS_GAIN)
+                .min(1.0)
+                .max(levels[column] * GLOW_BASS_LEVEL_SHARE)
         } else {
             levels[column]
         }
@@ -368,7 +422,8 @@ impl Drawer {
         self.bass[0] = bass_level(levels);
         for column in 0..COLUMNS {
             self.rises[column] = (levels[column] - self.averages[column]).max(0.0);
-            self.averages[column] += (levels[column] - self.averages[column]) * AVERAGE_SHARE_PER_FRAME;
+            self.averages[column] +=
+                (levels[column] - self.averages[column]) * AVERAGE_SHARE_PER_FRAME;
         }
         let treble = treble_level(levels);
         self.treble_rise = (treble - self.treble_average).max(0.0);
@@ -394,7 +449,9 @@ impl Drawer {
             Style::Bars => bars_frame(levels, paint),
             Style::Pulse => pulse_frame(levels, self.treble_rise, paint),
             Style::Glow => glow_frame(levels, &self.rises, paint),
-            Style::Ripple => keys_frame(paint, |height, column, _| self.bass[ripple_delay(height, column)]),
+            Style::Ripple => keys_frame(paint, |height, column, _| {
+                self.bass[ripple_delay(height, column)]
+            }),
             Style::Sparkle => {
                 let pulse = self.bass[0] * SPARK_PULSE_SHARE;
                 keys_frame(paint, |_, _, led| self.sparks[led].max(pulse))
@@ -446,21 +503,37 @@ impl Running {
     pub fn start(device: HidDevice, product_id: u16, style: Style) -> Result<Self, String> {
         let status = ronin::read_status(&device, product_id)?;
         let restore = ronin::restore_change(&status)?;
-        let look = Look { colour: status.colour, brightness: status.brightness, direction: status.direction, style };
+        let look = Look {
+            colour: status.colour,
+            brightness: status.brightness,
+            direction: status.direction,
+            style,
+        };
         let stop = Arc::new(AtomicBool::new(false));
-        let report = Arc::new(Mutex::new(Report { look, ..Report::default() }));
+        let report = Arc::new(Mutex::new(Report {
+            look,
+            ..Report::default()
+        }));
         let look = Arc::new(Mutex::new(look));
         let thread = {
             let (stop, report, look) = (Arc::clone(&stop), Arc::clone(&report), Arc::clone(&look));
             thread::spawn(move || run(&device, product_id, restore, &look, &stop, &report))
         };
-        Ok(Self { stop, report, look, thread })
+        Ok(Self {
+            stop,
+            report,
+            look,
+            thread,
+        })
     }
 
     /// Changes the bars' look. It stays with the bars and never goes to the keyboard, because
     /// a lighting command would end Music Rhythm mode.
     pub fn set_look(&self, look: Look) -> Result<(), String> {
-        if !(1..=ronin::LEVEL_MAX).contains(&look.brightness) || look.colour > ronin::COLOUR_MAX || look.direction > ronin::DIRECTION_MAX {
+        if !(1..=ronin::LEVEL_MAX).contains(&look.brightness)
+            || look.colour > ronin::COLOUR_MAX
+            || look.direction > ronin::DIRECTION_MAX
+        {
             return Err("That brightness, colour or direction isn't available.".to_string());
         }
         *self.look.lock().unwrap_or_else(PoisonError::into_inner) = look;
@@ -477,19 +550,34 @@ impl Running {
     }
 
     pub fn report(&self) -> Report {
-        self.report.lock().unwrap_or_else(PoisonError::into_inner).clone()
+        self.report
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
     }
 
     /// Stops the bars and waits for the keyboard's lighting to be restored.
     pub fn stop(self) -> Report {
         self.stop.store(true, Ordering::Relaxed);
         let _ = self.thread.join();
-        self.report.lock().unwrap_or_else(PoisonError::into_inner).clone()
+        self.report
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
     }
 }
 
-fn run(device: &HidDevice, product_id: u16, restore: ronin::Change, look: &Mutex<Look>, stop: &AtomicBool, report: &Mutex<Report>) {
-    let update = |change: &mut dyn FnMut(&mut Report)| change(&mut report.lock().unwrap_or_else(PoisonError::into_inner));
+fn run(
+    device: &HidDevice,
+    product_id: u16,
+    restore: ronin::Change,
+    look: &Mutex<Look>,
+    stop: &AtomicBool,
+    report: &Mutex<Report>,
+) {
+    let update = |change: &mut dyn FnMut(&mut Report)| {
+        change(&mut report.lock().unwrap_or_else(PoisonError::into_inner))
+    };
     let problem = match prepare_source(stop) {
         Err(problem) => Some(problem),
         Ok(None) => None,
@@ -500,7 +588,11 @@ fn run(device: &HidDevice, product_id: u16, restore: ronin::Change, look: &Mutex
             let left = matches!(streamed, Ok(true));
             // From Music Rhythm the effect shortcut always lands on the first effect, so move
             // on from the effect the bars started on instead.
-            let change = if left { restore.with_next_effect() } else { restore };
+            let change = if left {
+                restore.with_next_effect()
+            } else {
+                restore
+            };
             let restored = ronin::apply(device, product_id, change).map(|_| ());
             update(&mut |report| report.ended_by_keyboard = left);
             streamed.map(|_| ()).and(restored).err()
@@ -541,16 +633,23 @@ fn stream(
 
     let mut spectrum = Spectrum::new();
     let mut lit_total = [0.0; ROWS.len()];
-    let (mut frames, mut late, mut failed_total, mut failed_in_a_row) = (0_u64, 0_u64, 0_u64, 0_u32);
+    let (mut frames, mut late, mut failed_total, mut failed_in_a_row) =
+        (0_u64, 0_u64, 0_u64, 0_u32);
     let mut slowest = Duration::ZERO;
     // Over the current log period, to show when frames ran late and why.
-    let (mut period_late, mut period_slowest, mut period_lateness) = (0_u64, Duration::ZERO, Duration::ZERO);
+    let (mut period_late, mut period_slowest, mut period_lateness) =
+        (0_u64, Duration::ZERO, Duration::ZERO);
     let mut last_seen = None;
     let current = |look: &Mutex<Look>| *look.lock().unwrap_or_else(PoisonError::into_inner);
     let first = current(look);
-    eprintln!("bars started: brightness {}, colour {}, direction {}", first.brightness, first.colour, first.direction);
+    eprintln!(
+        "bars started: brightness {}, colour {}, direction {}",
+        first.brightness, first.colour, first.direction
+    );
     let mut fade = Fade::new(first);
-    let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(1, |time| time.as_nanos() as u64);
+    let seed = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(1, |time| time.as_nanos() as u64);
     let mut drawer = Drawer::new(seed);
     // The keyboard keeps reporting its own value, which a choice in the window doesn't change,
     // so only a change in what it reports means the shortcut was pressed.
@@ -573,24 +672,43 @@ fn stream(
         let levels = *spectrum.update(&source.latest(), source.rate());
         let sent_at = Instant::now();
         let chosen = current(look);
-        let failed = ronin::send_frame(device, &drawer.frame(chosen.style, &levels, fade.next(chosen)));
+        let failed = ronin::send_frame(
+            device,
+            &drawer.frame(chosen.style, &levels, fade.next(chosen)),
+        );
         slowest = slowest.max(sent_at.elapsed());
         period_slowest = period_slowest.max(sent_at.elapsed());
         failed_total += u64::from(failed);
-        failed_in_a_row = if failed == 0 { 0 } else { failed_in_a_row + failed };
+        failed_in_a_row = if failed == 0 {
+            0
+        } else {
+            failed_in_a_row + failed
+        };
         frames += 1;
         for (total, lit) in lit_total.iter_mut().zip(rows_lit(&levels)) {
             *total += lit;
         }
         let seen = ronin::latest_reported(device, product_id).ok().flatten();
         if let Some(status) = &seen {
-            if status.brightness != reported_brightness && (1..=ronin::LEVEL_MAX).contains(&status.brightness) {
+            if status.brightness != reported_brightness
+                && (1..=ronin::LEVEL_MAX).contains(&status.brightness)
+            {
                 reported_brightness = status.brightness;
-                look.lock().unwrap_or_else(PoisonError::into_inner).brightness = status.brightness;
+                look.lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .brightness = status.brightness;
             }
-            let values = (status.effect.clone(), status.brightness, status.colour, status.direction);
+            let values = (
+                status.effect.clone(),
+                status.brightness,
+                status.colour,
+                status.direction,
+            );
             if last_seen.as_ref() != Some(&values) {
-                eprintln!("keyboard reported: effect {}, brightness {}, colour {}, direction {}", values.0, values.1, values.2, values.3);
+                eprintln!(
+                    "keyboard reported: effect {}, brightness {}, colour {}, direction {}",
+                    values.0, values.1, values.2, values.3
+                );
                 last_seen = Some(values);
             }
             if status.effect_number.is_some() {
@@ -632,7 +750,11 @@ pub fn run_meter(seconds: u64) -> Result<(), String> {
     let never = AtomicBool::new(false);
     let source = AudioSource::start(FFT_SIZE)?;
     source.wait_until_ready(&never)?;
-    println!("capturing from {} at {} Hz", source.device().unwrap_or_default(), source.rate());
+    println!(
+        "capturing from {} at {} Hz",
+        source.device().unwrap_or_default(),
+        source.rate()
+    );
     let mut spectrum = Spectrum::new();
     let mut lit_total = [0.0; ROWS.len()];
     let mut highest = 0.0_f32;
@@ -642,13 +764,18 @@ pub fn run_meter(seconds: u64) -> Result<(), String> {
         sleep(Duration::from_secs(1) / FPS);
         let samples = source.latest();
         let levels = *spectrum.update(&samples, source.rate());
-        highest = samples.iter().fold(highest, |high, sample| high.max(sample.abs()));
+        highest = samples
+            .iter()
+            .fold(highest, |high, sample| high.max(sample.abs()));
         for (total, lit) in lit_total.iter_mut().zip(rows_lit(&levels)) {
             *total += lit;
         }
         frames += 1;
         if frames % (FPS / 2) == 0 {
-            let meter: String = levels.iter().map(|level| b" .:-=+*#%@"[((level * 10.0) as usize).min(9)] as char).collect();
+            let meter: String = levels
+                .iter()
+                .map(|level| b" .:-=+*#%@"[((level * 10.0) as usize).min(9)] as char)
+                .collect();
             println!("{:5.1} s  {meter}", started.elapsed().as_secs_f64());
         }
     }
@@ -677,7 +804,10 @@ mod tests {
 
     fn assert_close(actual: &Levels, expected: &Levels) {
         for (column, (actual, expected)) in actual.iter().zip(expected).enumerate() {
-            assert!((actual - expected).abs() < 1e-5, "column {column}: {actual} against {expected}");
+            assert!(
+                (actual - expected).abs() < 1e-5,
+                "column {column}: {actual} against {expected}"
+            );
         }
     }
 
@@ -691,14 +821,44 @@ mod tests {
                 assert_close(&levels, &[0.0; COLUMNS]);
             }
             if frame == 5 {
-                assert_close(&levels, &[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3519942857, 1.0, 4.8322e-06, 0.0, 0.0]);
+                assert_close(
+                    &levels,
+                    &[
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.3519942857,
+                        1.0,
+                        4.8322e-06,
+                        0.0,
+                        0.0,
+                    ],
+                );
             }
             if frame == 20 {
                 assert_close(
                     &levels,
                     &[
-                        0.0995823023, 0.1427922769, 0.2374479282, 0.8660359981, 0.8661113017, 0.2885797535, 0.0814413275,
-                        0.0514899624, 0.0234449939, 0.3510816223, 1.0, 7.88564e-05, 0.0, 0.0,
+                        0.0995823023,
+                        0.1427922769,
+                        0.2374479282,
+                        0.8660359981,
+                        0.8661113017,
+                        0.2885797535,
+                        0.0814413275,
+                        0.0514899624,
+                        0.0234449939,
+                        0.3510816223,
+                        1.0,
+                        7.88564e-05,
+                        0.0,
+                        0.0,
                     ],
                 );
             }
@@ -712,7 +872,15 @@ mod tests {
     #[test]
     fn bars_rise_from_the_bottom_row() {
         let levels: Levels = std::array::from_fn(|column| column as f64 / 13.0);
-        let frame = bars_frame(&levels, &Look { colour: 6, brightness: 5, ..Look::default() }.paint());
+        let frame = bars_frame(
+            &levels,
+            &Look {
+                colour: 6,
+                brightness: 5,
+                ..Look::default()
+            }
+            .paint(),
+        );
         // The full column reaches the top row, and the empty one stays dark.
         assert_eq!(led(&frame, 43), [255; 3]);
         assert_eq!(led(&frame, 91), [0; 3]);
@@ -727,7 +895,12 @@ mod tests {
     fn presets_one_to_seven_are_solid_whatever_the_direction() {
         for (colour, solid) in SOLID_PRESETS.iter().enumerate() {
             for direction in [0, 1] {
-                let look = Look { colour: colour as u8, brightness: 5, direction, ..Look::default() };
+                let look = Look {
+                    colour: colour as u8,
+                    brightness: 5,
+                    direction,
+                    ..Look::default()
+                };
                 assert!((0..COLUMNS).all(|column| look.column_colour(column) == *solid));
             }
         }
@@ -735,12 +908,25 @@ mod tests {
 
     #[test]
     fn direction_flips_the_gradient() {
-        let forward = Look { colour: 7, brightness: 5, ..Look::default() };
-        let backward = Look { direction: 1, ..forward };
+        let forward = Look {
+            colour: 7,
+            brightness: 5,
+            ..Look::default()
+        };
+        let backward = Look {
+            direction: 1,
+            ..forward
+        };
         assert_eq!(forward.column_colour(0), GRADIENT[0]);
-        assert_eq!(forward.column_colour(COLUMNS - 1), GRADIENT[GRADIENT.len() - 1]);
+        assert_eq!(
+            forward.column_colour(COLUMNS - 1),
+            GRADIENT[GRADIENT.len() - 1]
+        );
         for column in 0..COLUMNS {
-            assert_eq!(backward.column_colour(column), forward.column_colour(COLUMNS - 1 - column));
+            assert_eq!(
+                backward.column_colour(column),
+                forward.column_colour(COLUMNS - 1 - column)
+            );
         }
     }
 
@@ -748,14 +934,27 @@ mod tests {
     fn brightness_dims_the_frame() {
         let levels = [1.0; COLUMNS];
         for (brightness, expected) in [(1, 51), (3, 153), (5, 255)] {
-            let frame = bars_frame(&levels, &Look { colour: 0, brightness, ..Look::default() }.paint());
+            let frame = bars_frame(
+                &levels,
+                &Look {
+                    colour: 0,
+                    brightness,
+                    ..Look::default()
+                }
+                .paint(),
+            );
             assert_eq!(led(&frame, 43), [expected, 0, 0]);
         }
     }
 
     #[test]
     fn pulse_lights_every_key_with_the_stronger_of_bass_and_treble() {
-        let paint = Look { colour: 6, brightness: 5, ..Look::default() }.paint();
+        let paint = Look {
+            colour: 6,
+            brightness: 5,
+            ..Look::default()
+        }
+        .paint();
         let mut levels = [0.0; COLUMNS];
         // Mids alone don't move it.
         levels[BASS_COLUMNS] = 1.0;
@@ -800,7 +999,12 @@ mod tests {
     }
 
     fn white() -> Paint {
-        Look { colour: 6, brightness: 5, ..Look::default() }.paint()
+        Look {
+            colour: 6,
+            brightness: 5,
+            ..Look::default()
+        }
+        .paint()
     }
 
     fn bass_hit() -> Levels {
@@ -816,7 +1020,11 @@ mod tests {
         let mut centre_lit = None;
         let mut edge_lit = None;
         for frame_number in 0..RIPPLE_HISTORY {
-            let levels = if frame_number == 0 { bass_hit() } else { [0.0; COLUMNS] };
+            let levels = if frame_number == 0 {
+                bass_hit()
+            } else {
+                [0.0; COLUMNS]
+            };
             let frame = drawer.frame(Style::Ripple, &levels, &white());
             if led(&frame, centre) == [255; 3] {
                 centre_lit = Some(frame_number);
@@ -843,7 +1051,10 @@ mod tests {
     fn ripple_delays_all_fit_the_history() {
         for (height, row) in ROWS.iter().enumerate() {
             for position in 0..row.len() {
-                assert!((ripple_delay(height, key_column(position, row)) as f64) < RIPPLE_HISTORY as f64 - 1.0);
+                assert!(
+                    (ripple_delay(height, key_column(position, row)) as f64)
+                        < RIPPLE_HISTORY as f64 - 1.0
+                );
             }
         }
     }
@@ -854,7 +1065,11 @@ mod tests {
         let mut levels = [0.0; COLUMNS];
         levels[COLUMNS - 1] = 1.0;
         let frame = drawer.frame(Style::Sparkle, &levels, &white());
-        let lit = ROWS.iter().flat_map(|row| row.iter()).filter(|&&slot| led(&frame, slot) == [255; 3]).count();
+        let lit = ROWS
+            .iter()
+            .flat_map(|row| row.iter())
+            .filter(|&&slot| led(&frame, slot) == [255; 3])
+            .count();
         assert!((1..=2).contains(&lit), "{lit}");
         let quiet = [0.0; COLUMNS];
         let mut frame = frame;
@@ -873,7 +1088,12 @@ mod tests {
 
     #[test]
     fn glow_gives_each_column_its_own_level() {
-        let paint = Look { colour: 6, brightness: 5, ..Look::default() }.paint();
+        let paint = Look {
+            colour: 6,
+            brightness: 5,
+            ..Look::default()
+        }
+        .paint();
         let mut levels = [0.0; COLUMNS];
         levels[COLUMNS - 1] = 1.0;
         levels[0] = 0.5;
@@ -887,22 +1107,51 @@ mod tests {
     #[test]
     fn pulse_follows_the_preset_and_brightness() {
         let levels = [1.0; COLUMNS];
-        let red = pulse_frame(&levels, 0.0, &Look { colour: 0, brightness: 1, ..Look::default() }.paint());
+        let red = pulse_frame(
+            &levels,
+            0.0,
+            &Look {
+                colour: 0,
+                brightness: 1,
+                ..Look::default()
+            }
+            .paint(),
+        );
         assert_eq!(led(&red, 43), [51, 0, 0]);
-        let gradient = Look { colour: 7, brightness: 5, ..Look::default() };
-        let flipped = Look { direction: 1, ..gradient };
-        assert_eq!(led(&pulse_frame(&levels, 0.0, &gradient.paint()), 15), [255, 0, 0]);
-        assert_eq!(led(&pulse_frame(&levels, 0.0, &flipped.paint()), 15), [255, 0, 255]);
+        let gradient = Look {
+            colour: 7,
+            brightness: 5,
+            ..Look::default()
+        };
+        let flipped = Look {
+            direction: 1,
+            ..gradient
+        };
+        assert_eq!(
+            led(&pulse_frame(&levels, 0.0, &gradient.paint()), 15),
+            [255, 0, 0]
+        );
+        assert_eq!(
+            led(&pulse_frame(&levels, 0.0, &flipped.paint()), 15),
+            [255, 0, 255]
+        );
     }
 
     #[test]
     fn a_new_look_fades_in() {
-        let red = Look { colour: 0, brightness: 5, ..Look::default() };
+        let red = Look {
+            colour: 0,
+            brightness: 5,
+            ..Look::default()
+        };
         let blue = Look { colour: 2, ..red };
         let mut fade = Fade::new(red);
         assert_eq!(fade.next(red).colours[0], [255.0, 0.0, 0.0]);
         let first = fade.next(blue).colours[0];
-        assert!(first[0] > 200.0 && first[2] > 0.0 && first[2] < 50.0, "{first:?}");
+        assert!(
+            first[0] > 200.0 && first[2] > 0.0 && first[2] < 50.0,
+            "{first:?}"
+        );
         for _ in 1..FADE_FRAMES {
             fade.next(blue);
         }
@@ -911,7 +1160,11 @@ mod tests {
 
     #[test]
     fn a_change_mid_fade_starts_from_what_is_showing() {
-        let red = Look { colour: 0, brightness: 5, ..Look::default() };
+        let red = Look {
+            colour: 0,
+            brightness: 5,
+            ..Look::default()
+        };
         let blue = Look { colour: 2, ..red };
         let green = Look { colour: 1, ..red };
         let mut fade = Fade::new(red);
@@ -919,7 +1172,10 @@ mod tests {
             fade.next(blue);
         }
         let first = fade.next(green).colours[0];
-        assert!(first[0] > 0.0 && first[1] > 0.0 && first[2] > 0.0, "{first:?}");
+        assert!(
+            first[0] > 0.0 && first[1] > 0.0 && first[2] > 0.0,
+            "{first:?}"
+        );
     }
 
     #[test]

@@ -15,11 +15,17 @@ pub struct Devices {
 #[derive(Serialize)]
 #[serde(tag = "state", rename_all = "camelCase")]
 pub enum Reading<T> {
-    Connected { status: T },
+    Connected {
+        status: T,
+    },
     /// Listed by the system, but this connection has no settings channel, as on Bluetooth.
-    NoSettings { name: String },
+    NoSettings {
+        name: String,
+    },
     NotFound,
-    Failed { message: String },
+    Failed {
+        message: String,
+    },
     /// Audio bars have the keyboard, and a status request would land between their frames.
     Busy,
 }
@@ -28,7 +34,9 @@ pub fn read_all(api: &mut HidApi, keyboard_busy: bool) -> Devices {
     if let Err(error) = api.refresh_devices() {
         let message = error.to_string();
         return Devices {
-            keyboard: Reading::Failed { message: message.clone() },
+            keyboard: Reading::Failed {
+                message: message.clone(),
+            },
             mouse: Reading::Failed { message },
         };
     }
@@ -36,9 +44,19 @@ pub fn read_all(api: &mut HidApi, keyboard_busy: bool) -> Devices {
         keyboard: if keyboard_busy {
             Reading::Busy
         } else {
-            read_device(api, ronin::is_settings_channel, ronin::is_this_device, ronin::read_status)
+            read_device(
+                api,
+                ronin::is_settings_channel,
+                ronin::is_this_device,
+                ronin::read_status,
+            )
         },
-        mouse: read_device(api, banshee::is_settings_channel, banshee::is_this_device, banshee::read_status),
+        mouse: read_device(
+            api,
+            banshee::is_settings_channel,
+            banshee::is_this_device,
+            banshee::read_status,
+        ),
     }
 }
 
@@ -48,7 +66,9 @@ pub fn change_mouse(api: &mut HidApi, change: banshee::Change) -> Result<banshee
         .device_list()
         .find(|info| banshee::is_settings_channel(info))
         .ok_or("The mouse's settings aren't available. Connect it with the USB cable.")?;
-    let device = info.open_device(api).map_err(|error| format!("Couldn't open the settings channel: {error}"))?;
+    let device = info
+        .open_device(api)
+        .map_err(|error| format!("Couldn't open the settings channel: {error}"))?;
     banshee::apply(&device, change)
 }
 
@@ -62,8 +82,12 @@ pub fn open_keyboard(api: &mut HidApi) -> Result<(HidDevice, u16), String> {
     let info = api
         .device_list()
         .find(|info| ronin::is_settings_channel(info))
-        .ok_or("The keyboard's settings aren't available. Connect it with the cable or receiver.")?;
-    let device = info.open_device(api).map_err(|error| format!("Couldn't open the settings channel: {error}"))?;
+        .ok_or(
+            "The keyboard's settings aren't available. Connect it with the cable or receiver.",
+        )?;
+    let device = info
+        .open_device(api)
+        .map_err(|error| format!("Couldn't open the settings channel: {error}"))?;
     Ok((device, info.product_id()))
 }
 
@@ -84,7 +108,12 @@ fn read_device<T>(
         };
     }
     match api.device_list().find(|info| is_this_device(info)) {
-        Some(info) => Reading::NoSettings { name: info.product_string().unwrap_or("Unnamed device").to_string() },
+        Some(info) => Reading::NoSettings {
+            name: info
+                .product_string()
+                .unwrap_or("Unnamed device")
+                .to_string(),
+        },
         None => Reading::NotFound,
     }
 }
