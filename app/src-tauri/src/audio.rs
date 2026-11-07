@@ -9,7 +9,10 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::{self, sleep};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-const HELPER_APP: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tools/audio_tap/FoxkitAudioTap.app");
+const HELPER_APP: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../tools/audio_tap/FoxkitAudioTap.app"
+);
 const CHANNELS: usize = 2;
 const SAMPLE_BYTES: usize = 4;
 const PERMISSION_WAIT: Duration = Duration::from_secs(90);
@@ -34,13 +37,20 @@ impl AudioSource {
     /// direct pipes, so it writes to named ones. It's given this app's pid, and ends if this
     /// app dies.
     pub fn start(window: usize) -> Result<Self, String> {
-        let stamp = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |time| time.as_nanos());
-        let folder = std::env::temp_dir().join(format!("foxkit-audio-{}-{stamp}", std::process::id()));
-        fs::create_dir(&folder).map_err(|error| format!("Couldn't prepare audio capture: {error}"))?;
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |time| time.as_nanos());
+        let folder =
+            std::env::temp_dir().join(format!("foxkit-audio-{}-{stamp}", std::process::id()));
+        fs::create_dir(&folder)
+            .map_err(|error| format!("Couldn't prepare audio capture: {error}"))?;
         let samples_path = folder.join("samples");
         let status_path = folder.join("status");
         let source = Self {
-            shared: Arc::new(Mutex::new(Shared { samples: vec![0.0; window], ..Shared::default() })),
+            shared: Arc::new(Mutex::new(Shared {
+                samples: vec![0.0; window],
+                ..Shared::default()
+            })),
             folder,
         };
         for path in [&samples_path, &status_path] {
@@ -64,7 +74,10 @@ impl AudioSource {
             // Both readers wait for a writer, so opening the pipes here lets them finish.
             let _ = File::create(&samples_path);
             let _ = File::create(&status_path);
-            return Err("Couldn't start the audio helper. Build it with tools/audio_tap/build.sh.".to_string());
+            return Err(
+                "Couldn't start the audio helper. Build it with tools/audio_tap/build.sh."
+                    .to_string(),
+            );
         }
         Ok(source)
     }
@@ -87,7 +100,10 @@ impl AudioSource {
             drop(shared);
             sleep(POLL);
         }
-        Err("Audio capture didn't start. Check System Audio Recording in System Settings.".to_string())
+        Err(
+            "Audio capture didn't start. Check System Audio Recording in System Settings."
+                .to_string(),
+        )
     }
 
     pub fn rate(&self) -> u32 {
@@ -111,7 +127,10 @@ impl Drop for AudioSource {
     fn drop(&mut self) {
         if let Some(pid) = self.lock().pid {
             // If it already stopped, this fails harmlessly.
-            let _ = Command::new("/bin/kill").args(["-TERM", &pid.to_string()]).stderr(Stdio::null()).status();
+            let _ = Command::new("/bin/kill")
+                .args(["-TERM", &pid.to_string()])
+                .stderr(Stdio::null())
+                .status();
         }
         let _ = fs::remove_dir_all(&self.folder);
     }
@@ -128,7 +147,10 @@ fn spawn_status_reader(path: PathBuf, shared: Arc<Mutex<Shared>>) {
 }
 
 fn apply_status_line(shared: &mut Shared, line: &str) {
-    if let Some((device, rate)) = line.strip_prefix("device ").and_then(|rest| rest.rsplit_once(" rate ")) {
+    if let Some((device, rate)) = line
+        .strip_prefix("device ")
+        .and_then(|rest| rest.rsplit_once(" rate "))
+    {
         if let Ok(rate) = rate.parse() {
             shared.rate = rate;
             shared.device = Some(device.to_string());
@@ -147,7 +169,9 @@ fn spawn_sample_reader(path: PathBuf, shared: Arc<Mutex<Shared>>) {
 }
 
 fn read_samples(path: &Path, shared: &Mutex<Shared>) {
-    let Ok(mut file) = File::open(path) else { return };
+    let Ok(mut file) = File::open(path) else {
+        return;
+    };
     let frame_bytes = CHANNELS * SAMPLE_BYTES;
     let mut buffer = vec![0; 65536];
     let mut held = 0;
@@ -188,7 +212,10 @@ mod tests {
 
     #[test]
     fn averages_channels() {
-        let bytes: Vec<u8> = [0.5_f32, 0.25, -1.0, 1.0].iter().flat_map(|sample| sample.to_ne_bytes()).collect();
+        let bytes: Vec<u8> = [0.5_f32, 0.25, -1.0, 1.0]
+            .iter()
+            .flat_map(|sample| sample.to_ne_bytes())
+            .collect();
         assert_eq!(mono_samples(&bytes), [0.375, 0.0]);
     }
 
@@ -201,7 +228,10 @@ mod tests {
         assert_eq!(shared.rate, 44100);
         assert_eq!(shared.device.as_deref(), Some("Stone 358 Pro"));
         assert!(shared.errors.is_empty());
-        apply_status_line(&mut shared, "error System Audio Recording permission not granted");
+        apply_status_line(
+            &mut shared,
+            "error System Audio Recording permission not granted",
+        );
         assert_eq!(shared.errors.len(), 1);
     }
 }

@@ -1,6 +1,7 @@
 //! Stored value to DPI for chip 8. The mouse's display confirms 9, 18 and 38 as 800, 1600
 //! and 3200. The others aren't confirmed on a mouse yet.
 
+#[rustfmt::skip]
 const CHIP_8: [(u16, u16); 120] = [
     (0, 100), (2, 200), (3, 300), (4, 400), (5, 500), (6, 600),
     (7, 700), (9, 800), (10, 900), (11, 1000), (12, 1100), (13, 1200),
@@ -25,11 +26,17 @@ const CHIP_8: [(u16, u16); 120] = [
 ];
 
 pub fn chip_8_dpi(value: u16) -> Option<u16> {
-    CHIP_8.iter().find(|entry| entry.0 == value).map(|entry| entry.1)
+    CHIP_8
+        .iter()
+        .find(|entry| entry.0 == value)
+        .map(|entry| entry.1)
 }
 
 pub fn chip_8_value(dpi: u16) -> Option<u16> {
-    CHIP_8.iter().find(|entry| entry.1 == dpi).map(|entry| entry.0)
+    CHIP_8
+        .iter()
+        .find(|entry| entry.1 == dpi)
+        .map(|entry| entry.0)
 }
 
 #[cfg(test)]

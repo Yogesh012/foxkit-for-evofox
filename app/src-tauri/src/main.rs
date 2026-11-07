@@ -27,7 +27,11 @@ struct Bars(Mutex<Option<bars::Running>>);
 
 impl Bars {
     fn is_active(&self) -> bool {
-        self.0.lock().unwrap_or_else(PoisonError::into_inner).as_ref().is_some_and(|running| !running.is_finished())
+        self.0
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .as_ref()
+            .is_some_and(|running| !running.is_finished())
     }
 
     fn stop(&self) -> Option<bars::Report> {
@@ -56,13 +60,22 @@ struct ShortcutProblem(Mutex<Option<String>>);
 struct LastStyle(Mutex<bars::Style>);
 
 fn load_style(app: &AppHandle) -> bars::Style {
-    let saved = app.path().app_config_dir().ok().and_then(|folder| fs::read_to_string(folder.join(STYLE_FILE)).ok());
-    saved.and_then(|text| serde_json::from_str(&text).ok()).unwrap_or_default()
+    let saved = app
+        .path()
+        .app_config_dir()
+        .ok()
+        .and_then(|folder| fs::read_to_string(folder.join(STYLE_FILE)).ok());
+    saved
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default()
 }
 
 // Losing this only means starting on the default style next time.
 fn save_style(app: &AppHandle, style: bars::Style) {
-    let (Ok(folder), Ok(text)) = (app.path().app_config_dir(), serde_json::to_string(&style)) else { return };
+    let (Ok(folder), Ok(text)) = (app.path().app_config_dir(), serde_json::to_string(&style))
+    else {
+        return;
+    };
     let _ = fs::create_dir_all(&folder);
     let _ = fs::write(folder.join(STYLE_FILE), text);
 }
@@ -75,7 +88,10 @@ fn read_devices(hid: tauri::State<'_, Hid>, bars: tauri::State<'_, Bars>) -> dev
 }
 
 #[tauri::command(async)]
-fn change_mouse(hid: tauri::State<'_, Hid>, change: banshee::Change) -> Result<banshee::Status, String> {
+fn change_mouse(
+    hid: tauri::State<'_, Hid>,
+    change: banshee::Change,
+) -> Result<banshee::Status, String> {
     let mut api = hid.0.lock().unwrap_or_else(PoisonError::into_inner);
     devices::change_mouse(&mut api, change)
 }
@@ -103,7 +119,11 @@ fn change_keyboard(
 
 /// The newest status the keyboard has sent by itself since the last check, if any.
 #[tauri::command(async)]
-fn keyboard_report(hid: tauri::State<'_, Hid>, bars: tauri::State<'_, Bars>, watch: tauri::State<'_, KeyboardWatch>) -> Option<ronin::Status> {
+fn keyboard_report(
+    hid: tauri::State<'_, Hid>,
+    bars: tauri::State<'_, Bars>,
+    watch: tauri::State<'_, KeyboardWatch>,
+) -> Option<ronin::Status> {
     if bars.is_active() {
         return None;
     }
@@ -124,11 +144,21 @@ fn keyboard_report(hid: tauri::State<'_, Hid>, bars: tauri::State<'_, Bars>, wat
 }
 
 #[tauri::command(async)]
-fn start_bars(hid: tauri::State<'_, Hid>, bars: tauri::State<'_, Bars>, watch: tauri::State<'_, KeyboardWatch>, style: tauri::State<'_, LastStyle>) -> Result<(), String> {
+fn start_bars(
+    hid: tauri::State<'_, Hid>,
+    bars: tauri::State<'_, Bars>,
+    watch: tauri::State<'_, KeyboardWatch>,
+    style: tauri::State<'_, LastStyle>,
+) -> Result<(), String> {
     begin_bars(&hid, &bars, &watch, &style)
 }
 
-fn begin_bars(hid: &Hid, bars: &Bars, watch: &KeyboardWatch, style: &LastStyle) -> Result<(), String> {
+fn begin_bars(
+    hid: &Hid,
+    bars: &Bars,
+    watch: &KeyboardWatch,
+    style: &LastStyle,
+) -> Result<(), String> {
     let mut slot = bars.0.lock().unwrap_or_else(PoisonError::into_inner);
     if slot.as_ref().is_some_and(|running| !running.is_finished()) {
         return Err("The audio bars are already running.".to_string());
@@ -145,13 +175,25 @@ fn begin_bars(hid: &Hid, bars: &Bars, watch: &KeyboardWatch, style: &LastStyle) 
 
 #[tauri::command(async)]
 fn bars_report(bars: tauri::State<'_, Bars>) -> Option<bars::Report> {
-    bars.0.lock().unwrap_or_else(PoisonError::into_inner).as_ref().map(bars::Running::report)
+    bars.0
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .as_ref()
+        .map(bars::Running::report)
 }
 
 #[tauri::command(async)]
-fn change_bars(app: AppHandle, bars: tauri::State<'_, Bars>, last_style: tauri::State<'_, LastStyle>, look: bars::Look) -> Result<(), String> {
+fn change_bars(
+    app: AppHandle,
+    bars: tauri::State<'_, Bars>,
+    last_style: tauri::State<'_, LastStyle>,
+    look: bars::Look,
+) -> Result<(), String> {
     let slot = bars.0.lock().unwrap_or_else(PoisonError::into_inner);
-    let running = slot.as_ref().filter(|running| !running.is_finished()).ok_or("The audio bars have stopped.")?;
+    let running = slot
+        .as_ref()
+        .filter(|running| !running.is_finished())
+        .ok_or("The audio bars have stopped.")?;
     running.set_look(look)?;
     let mut last = last_style.0.lock().unwrap_or_else(PoisonError::into_inner);
     if *last != look.style {
@@ -168,7 +210,11 @@ fn stop_bars(bars: tauri::State<'_, Bars>) -> Option<bars::Report> {
 
 #[tauri::command(async)]
 fn shortcut_problem(problem: tauri::State<'_, ShortcutProblem>) -> Option<String> {
-    problem.0.lock().unwrap_or_else(PoisonError::into_inner).take()
+    problem
+        .0
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .take()
 }
 
 /// Starts the bars, or stops them if they're running. The window finds out from the report.
@@ -181,8 +227,16 @@ fn toggle_bars(app: &AppHandle) {
             return;
         }
     }
-    if let Err(problem) = begin_bars(&app.state::<Hid>(), &bars, &app.state::<KeyboardWatch>(), &app.state::<LastStyle>()) {
-        *app.state::<ShortcutProblem>().0.lock().unwrap_or_else(PoisonError::into_inner) = Some(problem);
+    if let Err(problem) = begin_bars(
+        &app.state::<Hid>(),
+        &bars,
+        &app.state::<KeyboardWatch>(),
+        &app.state::<LastStyle>(),
+    ) {
+        *app.state::<ShortcutProblem>()
+            .0
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = Some(problem);
     }
 }
 
@@ -201,14 +255,24 @@ fn main() {
     if std::env::args().any(|arg| arg == "--status") {
         let mut api = api;
         let report = devices::read_all(&mut api, false);
-        println!("{}", serde_json::to_string_pretty(&report).expect("status serializes"));
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&report).expect("status serializes")
+        );
         return;
     }
 
     // Prints audio levels for this many seconds, without touching the keyboard.
     let args: Vec<String> = std::env::args().collect();
-    if let Some(seconds) = args.iter().position(|arg| arg == "--meter").and_then(|index| args.get(index + 1)) {
-        let result = seconds.parse().map_err(|_| "--meter needs a number of seconds".to_string()).and_then(bars::run_meter);
+    if let Some(seconds) = args
+        .iter()
+        .position(|arg| arg == "--meter")
+        .and_then(|index| args.get(index + 1))
+    {
+        let result = seconds
+            .parse()
+            .map_err(|_| "--meter needs a number of seconds".to_string())
+            .and_then(bars::run_meter);
         if let Err(problem) = result {
             eprintln!("{problem}");
             std::process::exit(1);
@@ -234,15 +298,34 @@ fn main() {
                 .build(),
         )
         .setup(|app| {
-            *app.state::<LastStyle>().0.lock().unwrap_or_else(PoisonError::into_inner) = load_style(app.handle());
+            *app.state::<LastStyle>()
+                .0
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner) = load_style(app.handle());
             let (modifiers, key) = BARS_SHORTCUT;
-            if let Err(error) = app.global_shortcut().register(Shortcut::new(Some(modifiers), key)) {
+            if let Err(error) = app
+                .global_shortcut()
+                .register(Shortcut::new(Some(modifiers), key))
+            {
                 let problem = format!("Couldn't register the Ctrl+Option+M shortcut: {error}");
-                *app.state::<ShortcutProblem>().0.lock().unwrap_or_else(PoisonError::into_inner) = Some(problem);
+                *app.state::<ShortcutProblem>()
+                    .0
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner) = Some(problem);
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![read_devices, change_mouse, change_keyboard, keyboard_report, start_bars, bars_report, change_bars, stop_bars, shortcut_problem])
+        .invoke_handler(tauri::generate_handler![
+            read_devices,
+            change_mouse,
+            change_keyboard,
+            keyboard_report,
+            start_bars,
+            bars_report,
+            change_bars,
+            stop_bars,
+            shortcut_problem
+        ])
         .build(tauri::generate_context!())
         .expect("the window should open")
         .run(|app, event| {
