@@ -1,0 +1,59 @@
+name: Release
+
+# Pushing a tag like v0.2.0 builds Foxkit for Apple silicon and Intel Macs and prepares a
+# draft release with the .dmg. Nothing is public until the draft is published on GitHub.
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+
+jobs:
+  release:
+    name: Build and draft the release
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check the tag matches the app's version
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' app/src-tauri/Cargo.toml | head -n 1)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match version $version in app/src-tauri/Cargo.toml."
+            exit 1
+          fi
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri
+
+      - name: Install the Tauri CLI
+        run: cargo install tauri-cli --version "^2" --locked
+
+      - name: Run tests
+        run: cargo test --locked --manifest-path app/src-tauri/Cargo.toml
+
+      - name: Build the app and .dmg
+        working-directory: app/src-tauri
+        run: cargo tauri build --target universal-apple-darwin
+
+      - name: Draft the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          dmg=$(ls app/src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg)
+          gh release create "$GITHUB_REF_NAME" "$dmg" \
+            --draft \
+            --verify-tag \
+            --title "Foxkit ${GITHUB_REF_NAME#v}" \
+            --generate-notes
