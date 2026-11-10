@@ -76,6 +76,12 @@ button.primary {
   color: var(--accent-text);
 }
 
+/* Stays readable while it works, rather than taking the grey of other disabled buttons. */
+button.primary:disabled {
+  color: var(--accent-text);
+  opacity: 0.85;
+}
+
 button:disabled {
   color: var(--muted);
   cursor: default;

@@ -395,6 +395,7 @@ fn main() {
         .manage(menu_bar::PanelHidden::default())
         .manage(LastMouse::default())
         .manage(updates::Available::default())
+        .manage(updates::Installing::default())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
@@ -451,7 +452,9 @@ fn main() {
             menu_bar::fit_panel,
             menu_bar::quit,
             updates::available_update,
-            updates::install_update
+            updates::install_update,
+            updates::update_progress,
+            updates::check_for_updates
         ])
         .build(tauri::generate_context!())
         .expect("the window should open")
