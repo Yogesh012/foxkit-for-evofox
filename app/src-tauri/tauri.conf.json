@@ -68,5 +68,13 @@
         "Helpers/FoxkitAudioTap.app": "../../tools/audio_tap/FoxkitAudioTap.app"
       }
     }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQ3OEUwMjQ1QjUzRkM5MjUKUldRbHlUKzFSUUtPMTUrQ3RsM3FqWjUxTzh0UHc2Y1V1TStEU0tFR2NsWUF2MWU4bjl1K3lxaUIK",
+      "endpoints": [
+        "https://github.com/Yogesh012/foxkit-for-evofox/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

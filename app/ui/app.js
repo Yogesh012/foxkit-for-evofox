@@ -436,6 +436,36 @@ async function refresh() {
   }
 }
 
+// A newer version, once the daily check has found one. Looked up every minute, which reads
+// only what the check stored, since the window can stay open for days.
+const UPDATE_LOOK_MS = 60 * 1000;
+const updateButton = document.getElementById("update");
+
+async function showUpdate() {
+  const available = await invoke("available_update");
+  updateButton.hidden = available === null;
+  if (available && !updateButton.disabled) updateButton.textContent = `Update to ${available.version}`;
+}
+
+updateButton.addEventListener("click", async () => {
+  updateButton.disabled = true;
+  updateButton.textContent = "Updating… Foxkit will restart";
+  try {
+    await invoke("install_update");
+  } catch (error) {
+    updateButton.disabled = false;
+    keyboardMessage = { text: String(error), className: "problem" };
+    await refresh();
+    showUpdate();
+  }
+});
+
+showUpdate();
+setInterval(showUpdate, UPDATE_LOOK_MS);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") showUpdate();
+});
+
 refreshButton.addEventListener("click", () => {
   mouseMessage = null;
   keyboardMessage = null;

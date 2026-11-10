@@ -285,6 +285,27 @@ login.addEventListener("change", async () => {
   }
 });
 
+// A newer version, once the daily check has found one.
+const update = document.getElementById("update");
+
+async function showUpdate() {
+  const available = await invoke("available_update");
+  update.hidden = available === null;
+  if (available && !update.disabled) update.textContent = `Update to ${available.version}`;
+}
+
+update.addEventListener("click", async () => {
+  update.disabled = true;
+  update.textContent = "Updating… Foxkit will restart";
+  try {
+    await invoke("install_update");
+  } catch (error) {
+    update.disabled = false;
+    showMessage(String(error), true);
+    showUpdate();
+  }
+});
+
 document.getElementById("open").addEventListener("click", () => invoke("open_main"));
 document.getElementById("quit").addEventListener("click", () => invoke("quit"));
 
@@ -302,7 +323,7 @@ function stopTimers() {
 async function opened() {
   stopTimers();
   timers = [setInterval(refreshMusic, MUSIC_MS), setInterval(refreshDevices, DEVICES_MS)];
-  await Promise.all([refreshMusic(), refreshDevices()]);
+  await Promise.all([refreshMusic(), refreshDevices(), showUpdate()]);
   login.checked = await invoke("launch_at_login");
 }
 

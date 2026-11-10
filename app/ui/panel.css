@@ -353,6 +353,11 @@ button:disabled {
   text-align: left;
 }
 
+.row-button.update {
+  color: var(--selected);
+  font-weight: 600;
+}
+
 .row-button:hover {
   background: var(--control);
 }
