@@ -891,7 +891,7 @@ dependencies = [
 
 [[package]]
 name = "foxkit"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "auto-launch",
  "block2",
