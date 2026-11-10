@@ -11,6 +11,7 @@ mod floating_panel;
 mod login;
 mod menu_bar;
 mod ronin;
+mod updates;
 
 use std::fs;
 use std::sync::{Mutex, PoisonError};
@@ -393,6 +394,8 @@ fn main() {
         .manage(LastStyle::default())
         .manage(menu_bar::PanelHidden::default())
         .manage(LastMouse::default())
+        .manage(updates::Available::default())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
@@ -406,6 +409,7 @@ fn main() {
         )
         .setup(|app| {
             menu_bar::install(app.handle())?;
+            updates::start_checking(app.handle().clone());
             if login::opened_at_login() {
                 menu_bar::hide_main(app.handle());
             } else {
@@ -445,7 +449,9 @@ fn main() {
             set_launch_at_login,
             menu_bar::open_main,
             menu_bar::fit_panel,
-            menu_bar::quit
+            menu_bar::quit,
+            updates::available_update,
+            updates::install_update
         ])
         .build(tauri::generate_context!())
         .expect("the window should open")

@@ -65,6 +65,17 @@ button {
   cursor: pointer;
 }
 
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+button.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
 button:disabled {
   color: var(--muted);
   cursor: default;

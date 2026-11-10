@@ -39,7 +39,9 @@ Tested with one Ronin TKL Wireless and one Banshee 2. Settings are read and chan
 2. Open Foxkit. Because it isn't signed with an Apple Developer ID, macOS stops it the first time and says it can't check it.
 3. Go to **System Settings → Privacy & Security**, scroll down to the message about Foxkit, and click **Open Anyway**. You only need to do this once.
 
-macOS may ask for System Audio Recording again after an update, for the same reason.
+Foxkit checks for a new version shortly after it starts and then once a day. When there is one, **Update to …** appears in the menu bar panel and the main window. Clicking it downloads the update, checks its signature, installs it and restarts Foxkit. Nothing is installed until you click. Versions before 0.2.0 can't update themselves, so install 0.2.0 from Releases once.
+
+macOS may ask for System Audio Recording again after an update, because Foxkit isn't signed with an Apple Developer ID.
 
 ## Building from source
 

@@ -1,7 +1,8 @@
 name: Release
 
 # Pushing a tag like v0.2.0 builds Foxkit for Apple silicon and Intel Macs and prepares a
-# draft release with the .dmg. Nothing is public until the draft is published on GitHub.
+# draft release with the .dmg, plus the signed update and latest.json that installed copies
+# check. Nothing is public, and no copy updates, until the draft is published on GitHub.
 on:
   push:
     tags: ["v*.*.*"]
@@ -43,16 +44,44 @@ jobs:
       - name: Run tests
         run: cargo test --locked --manifest-path app/src-tauri/Cargo.toml
 
-      - name: Build the app and .dmg
+      - name: Build the app, .dmg and signed update
         working-directory: app/src-tauri
-        run: cargo tauri build --target universal-apple-darwin
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error::The TAURI_SIGNING_PRIVATE_KEY secret isn't set, so the update can't be signed."
+            exit 1
+          fi
+          cargo tauri build --target universal-apple-darwin \
+            --config '{"bundle":{"createUpdaterArtifacts":true}}'
+
+      - name: Describe the update for installed copies
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          bundle=app/src-tauri/target/universal-apple-darwin/release/bundle/macos
+          archive="Foxkit_${version}_universal.app.tar.gz"
+          cp "$bundle/Foxkit.app.tar.gz" "$archive"
+          url="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/$archive"
+          # One universal build serves both kinds of Mac.
+          jq -n \
+            --arg version "$version" \
+            --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg signature "$(cat "$bundle/Foxkit.app.tar.gz.sig")" \
+            --arg url "$url" \
+            '{version: $version, pub_date: $date, notes: "",
+              platforms: {
+                "darwin-aarch64": {signature: $signature, url: $url},
+                "darwin-x86_64": {signature: $signature, url: $url}}}' > latest.json
 
       - name: Draft the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           dmg=$(ls app/src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg)
-          gh release create "$GITHUB_REF_NAME" "$dmg" \
+          archive="Foxkit_${GITHUB_REF_NAME#v}_universal.app.tar.gz"
+          gh release create "$GITHUB_REF_NAME" "$dmg" "$archive" latest.json \
             --draft \
             --verify-tag \
             --title "Foxkit ${GITHUB_REF_NAME#v}" \

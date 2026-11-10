@@ -37,8 +37,10 @@ For maintainers. Versions follow [Semantic Versioning](https://semver.org): a fi
    git push origin v0.2.0
    ```
 
-3. The **Release** workflow checks the tag matches the version, runs the tests, builds a universal `.dmg` for Apple silicon and Intel Macs, and creates a draft release with notes from the merged pull requests.
-4. Download the `.dmg` from the draft, try it, edit the notes if needed, and click **Publish release**.
+3. The **Release** workflow checks the tag matches the version, runs the tests, builds a universal `.dmg` for Apple silicon and Intel Macs, and creates a draft release with notes from the merged pull requests. It also attaches the signed update archive and `latest.json`, which installed copies read to find new versions.
+4. Download the `.dmg` from the draft, try it, edit the notes if needed, and click **Publish release**. Installed copies only see the new version once it's published.
+
+Updates are signed with a key that only the maintainer holds, kept as the `TAURI_SIGNING_PRIVATE_KEY` repository secret. Its public half is in `app/src-tauri/tauri.conf.json`, and Foxkit refuses any update not signed with it. If the key is lost, installed copies can't be updated any more, so keep a backup of it somewhere safe.
 
 To build the same universal `.dmg` locally, add the Intel target once with `rustup target add x86_64-apple-darwin`, then run `cargo tauri build --target universal-apple-darwin` from `app/src-tauri`.
 
