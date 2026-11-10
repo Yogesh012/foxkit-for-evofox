@@ -294,17 +294,65 @@ async function showUpdate() {
   if (available && !update.disabled) update.textContent = `Update to ${available.version}`;
 }
 
+// What the Update button says while an update installs.
+const UPDATE_PROGRESS_MS = 250;
+
+function updateProgressText(progress) {
+  if (progress?.phase === "installing") return "Installing… Foxkit will restart";
+  if (progress?.phase !== "downloading") return "Updating…";
+  // GitHub can take a while to start sending the file.
+  if (progress.received === 0) return "Connecting to GitHub…";
+  if (progress.total) return `Downloading… ${Math.floor((progress.received * 100) / progress.total)}%`;
+  return `Downloading… ${(progress.received / 1e6).toFixed(1)} MB`;
+}
+
+// Shows progress on the button until the install finishes or fails.
+function followUpdateProgress(button) {
+  const timer = setInterval(async () => {
+    const progress = await invoke("update_progress");
+    if (button.disabled) button.textContent = updateProgressText(progress);
+  }, UPDATE_PROGRESS_MS);
+  return () => clearInterval(timer);
+}
+
 update.addEventListener("click", async () => {
   update.disabled = true;
-  update.textContent = "Updating… Foxkit will restart";
+  update.textContent = updateProgressText(null);
+  const stopFollowing = followUpdateProgress(update);
   try {
     await invoke("install_update");
   } catch (error) {
+    stopFollowing();
     update.disabled = false;
     showMessage(String(error), true);
     showUpdate();
   }
 });
+
+// Checks GitHub now. When there's nothing newer, the button says so for a few seconds.
+const CHECK_RESULT_MS = 4000;
+
+async function checkNow(button, showWaiting, showProblem) {
+  button.disabled = true;
+  button.textContent = "Checking…";
+  try {
+    const result = await invoke("check_for_updates");
+    await showWaiting();
+    button.textContent = result.update ? "Check for updates" : `Foxkit ${result.currentVersion} is up to date`;
+  } catch (error) {
+    button.textContent = "Check for updates";
+    showProblem(String(error));
+  }
+  setTimeout(() => {
+    button.textContent = "Check for updates";
+    button.disabled = false;
+  }, CHECK_RESULT_MS);
+}
+
+const checkUpdates = document.getElementById("check-updates");
+checkUpdates.addEventListener("click", () =>
+  checkNow(checkUpdates, showUpdate, (problem) => showMessage(problem, true)),
+);
 
 document.getElementById("open").addEventListener("click", () => invoke("open_main"));
 document.getElementById("quit").addEventListener("click", () => invoke("quit"));
